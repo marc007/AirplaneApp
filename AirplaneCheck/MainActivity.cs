@@ -59,7 +59,6 @@ namespace AirplaneCheck
 		{
 			switch (item.ItemId) {
 			case Resource.Id.actionNew:
-				return true;
 				break;
 			case Resource.Id.actionRefresh:
 				AirplaneInfoData.Service.RefreshCache ();
