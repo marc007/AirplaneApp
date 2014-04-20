@@ -1,0 +1,4 @@
+﻿<menu xmlns:android="http://schemas.android.com/apk/res/android">
+<item android:id="@+id/actionNew" android:icon="@drawable/greenicon" android:title="New" showAsAction="ifRoom" />  
+<item android:id="@+id/actionRefresh" android:icon="@drawable/orangeicon" android:title="Refresh" showAsAction="ifRoom" /> 
+</menu> 

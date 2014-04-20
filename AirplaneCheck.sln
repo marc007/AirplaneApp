@@ -1,0 +1,44 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirplaneCheck", "AirplaneCheck\AirplaneCheck.csproj", "{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirplaneCheckTest", "AirplaneCheckTest\AirplaneCheckTest.csproj", "{6BDF5489-A03F-47EE-8146-1DAD81B45223}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Default|Any CPU = Default|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6BDF5489-A03F-47EE-8146-1DAD81B45223}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6BDF5489-A03F-47EE-8146-1DAD81B45223}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6BDF5489-A03F-47EE-8146-1DAD81B45223}.Default|Any CPU.ActiveCfg = Debug|Any CPU
+		{6BDF5489-A03F-47EE-8146-1DAD81B45223}.Default|Any CPU.Build.0 = Debug|Any CPU
+		{6BDF5489-A03F-47EE-8146-1DAD81B45223}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6BDF5489-A03F-47EE-8146-1DAD81B45223}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}.Default|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}.Default|Any CPU.Build.0 = Debug|Any CPU
+		{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(MonoDevelopProperties) = preSolution
+		StartupItem = AirplaneCheck\AirplaneCheck.csproj
+		Policies = $0
+		$0.DotNetNamingPolicy = $1
+		$1.DirectoryNamespaceAssociation = None
+		$1.ResourceNamePolicy = FileFormatDefault
+		$0.TextStylePolicy = $2
+		$2.FileWidth = 120
+		$2.TabsToSpaces = False
+		$2.inheritsSet = VisualStudio
+		$2.inheritsScope = text/plain
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

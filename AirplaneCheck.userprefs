@@ -1,0 +1,15 @@
+﻿<Properties>
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.Workbench ActiveDocument="AirplaneCheck\MainActivity.cs">
+    <Files>
+      <File FileName="AirplaneCheck\MainActivity.cs" Line="44" Column="43" />
+      <File FileName="AirplaneCheck\Resources\menu\airplanemainmenu.xml" Line="1" Column="1" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+  <MonoDevelop.Ide.ItemProperties.AsyncListView MonoForAntroid.PreferredDevice="3.7&quot; WVGA (Nexus One)" AndroidDeviceId-Debug="CB5A1K6ZWG" />
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MonoDevelop.Ide.ItemProperties.AirplaneCheck AndroidDeviceId-Debug="CB5A1K6ZWG" MonoForAntroid.PreferredDevice="3.7&quot; WVGA (Nexus One)" />
+</Properties>
