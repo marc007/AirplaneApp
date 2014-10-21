@@ -62,7 +62,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Novell\Novell.MonoDroid.CSharp.targets" />
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\Documents\GitHub\AirplaneCheck\AirplaneCheck\AirplaneCheck.csproj">
+    <ProjectReference Include="..\AirplaneCheck\AirplaneCheck.csproj">
       <Project>{A4B03BF2-9A0E-4A80-9D94-E2A84F936379}</Project>
       <Name>AirplaneCheck</Name>
     </ProjectReference>
