@@ -1,81 +1,71 @@
-# AirplaneCheck
+# Airplane Check
 
-AirplaneCheck provides quick FAA registration look‑ups for tail numbers. This repository contains the original Xamarin.Android client, a companion instrumentation test suite, and shared code for working with the Parse data backend. A modern web application now delivers the primary AirplaneCheck experience; the Xamarin projects remain for historical support only.
+Airplane Check queries FAA registration data stored in Parse and surfaces the results to end users. The project historically shipped as a Xamarin.Android mobile client, but a modern web application now provides the primary user experience going forward. This README explains the current state of the codebase, how to work with the legacy projects that still live here, and where the migration effort is heading.
 
-## Current status
+## Modern web application (preferred experience)
 
-- **Primary interface:** the AirplaneCheck web application. All new feature development and day-to-day usage should flow through the web app.
-- **Legacy clients:** the Xamarin.Android projects (`AirplaneCheck` and `AirplaneCheckTest`) are kept in maintenance mode for a limited set of devices. Only critical fixes are expected going forward.
-- **Backend:** both the web and Xamarin clients talk to the same Parse application for FAA registry data.
-
-Reach out to the AirplaneCheck maintainers if you need access to the web application source or deployment details.
+A new web front end is under active development to replace the Xamarin.Android app. The web app connects to the same Parse backend, offers a dramatically lighter install footprint, and will be the home for all future feature work. Until the web source is consolidated into this repository, refer to the web project documentation for detailed build and deployment steps; this README will be updated again once those assets are colocated. Please direct new issues and enhancements to the web application backlog first.
 
 ## Repository layout
 
 | Path | Description |
 | ---- | ----------- |
-| `AirplaneCheck/` | Xamarin.Android application project. Handles UI, Parse queries, and local caching. |
-| `AirplaneCheckTest/` | Xamarin.Android instrumentation project with NUnitLite tests for the caching service. |
-| `PCLAsyncRequest/` | Prototype portable class library for asynchronous HTTP helpers (unused in production). |
-| `Components/` | Bundled Xamarin component packages (Parse SDK and Json.NET). |
-| `packages/` | NuGet dependencies restored by Xamarin/Visual Studio. |
+| `AirplaneCheck/` | Legacy Xamarin.Android client that queries Parse for FAA aircraft registrations. |
+| `AirplaneCheckTest/` | Xamarin instrumentation project that exercises the Parse integration and cache behaviours on-device. |
+| `PCLAsyncRequest/` | Portable Class Library stub used for historical async request experimentation. |
+| `Components/` | Checked-in third-party Xamarin component packages (Parse SDK, Newtonsoft.Json) retained for archival builds. |
+| `packages/` | NuGet package cache referenced by the Xamarin solution. |
 
-## Working with the legacy Xamarin.Android app
+## Working with the Xamarin.Android client (legacy)
+
+Although the mobile client is in maintenance mode, you may still need to build or debug it while the web app rollout completes.
 
 ### Prerequisites
 
-- Visual Studio with Xamarin workload (Windows or macOS) or the latest Visual Studio for Mac.
-- Android SDK/platform tools that match your target device or emulator.
-- A Parse account with an application configured to host the FAA data set.
-- Access to an Android device or emulator with external storage available (for JSON caching).
+- Visual Studio with the Xamarin workload, or Xamarin Studio on macOS.
+- Android SDK platform tools (API level 19 or newer recommended).
+- An Android emulator or physical device with developer mode enabled.
 
-### Configure Parse credentials
+### Initial setup
 
-The Xamarin client initializes Parse in `AirplaneCheck/MainActivity.cs`:
+1. Clone this repository and open `AirplaneCheck.sln` in your IDE.
+2. Restore NuGet packages if prompted so the Newtonsoft.Json dependency is available.
+3. Verify that external storage permissions are granted in your emulator/device. The app writes cache files to external storage when retrieving aircraft data.
 
-```csharp
-ParseClient.Initialize("<APPLICATION_ID>", "<CLIENT_KEY>");
-```
+### Configuring Parse credentials
 
-Replace the placeholders with your Parse application ID and client key before building. For production builds, do **not** commit real keys—prefer build-time configuration (for example, `#if DEBUG` swaps or a generated partial class) to inject secrets securely.
+The Parse application and .NET keys are currently read inside [`AirplaneCheck/MainActivity.cs`](AirplaneCheck/MainActivity.cs) when `ParseClient.Initialize` is invoked. Before running against your own backend:
 
-### Cache behaviour and storage
+1. Obtain the correct `ApplicationId` and `.NET Key` from your Parse dashboard.
+2. Update the `ParseClient.Initialize("<ApplicationId>", "<DotNetKey>");` call with your environment-specific values.
+3. Avoid committing production credentials—store them in a private secrets file or apply the values via build-time substitution in your CI pipeline.
 
-The app persists search results to JSON so they can be re-used offline:
+### Running the app
 
-- `AirplaneInfoData.Service` creates an `AirplaneDataService` backed by an external storage directory: `<ExternalStorage>/AirplaneCheck`.
-- Each aircraft record is stored as a single `airplaneinfo{id}.json` file.
-- Tapping **Search** clears the cache (`AirplaneDataService.ClearCache`) before downloading fresh data from Parse.
-- The overflow menu includes a **Refresh** action that reloads the cached files into memory, and `ClearCache` is available programmatically if you need to reset storage during troubleshooting.
-- Because cache files are written to external storage, the manifest requests `WRITE_EXTERNAL_STORAGE`. Ensure the device or emulator grants this permission.
+1. In Visual Studio/Xamarin Studio, set **AirplaneCheck** as the startup project.
+2. Choose your target emulator or device and select **Run**/**Deploy**.
+3. Use the search field to enter an N-number (the app will automatically prefix `N` if omitted). Results are cached locally; use the overflow menu to refresh or clear cached entries.
 
-To remove cached data manually, delete the JSON files under `<ExternalStorage>/AirplaneCheck` or uninstall the application.
+### Running instrumentation tests
 
-### Build and run
+1. Set **AirplaneCheckTest** as the startup project.
+2. Deploy to the same emulator or device. The NUnitLite runner will appear on launch.
+3. Execute the test suite to validate Parse connectivity and cache read/write behaviour.
 
-1. Open `AirplaneCheck.sln` in Visual Studio.
-2. Set **AirplaneCheck** as the startup project.
-3. Choose an Android emulator or attached device with internet access.
-4. Provide valid Parse credentials (see above) and build/deploy (`F5`).
-5. Enter an FAA tail number (with or without the leading `N`) to populate the results list.
+## Caching behaviour
 
-### Running the instrumentation tests
+Caching is handled by [`AirplaneDataService`](AirplaneCheck/DataServices/AirplaneDataService.cs) and orchestrated through [`AirplaneInfoData`](AirplaneCheck/AirplaneInfoData.cs):
 
-1. Open the solution and set **AirplaneCheckTest** as the startup project.
-2. Deploy the test app to the same device/emulator used for the main application.
-3. Launch the app; the embedded NUnitLite runner will execute the tests on startup, validating create/read/update/delete behaviour of the caching layer.
-4. Inspect the in-app runner output to confirm all tests pass.
+- Cached records are serialized as JSON into `${ExternalStorage}/AirplaneCheck/airplaneinfo<ID>.json`.
+- `RefreshCache()` repopulates the in-memory list from all JSON files on disk; `ClearCache()` removes the files and clears the list.
+- `SaveAirplaneInfo()` assigns incremental IDs for new records and persists them back to disk so the app can render results offline.
 
-The tests interact only with the local file system and do not require live Parse credentials.
+Understanding this flow is important when debugging stale results or when planning new persistence strategies in the web app.
 
-## Deprecation plan for Xamarin projects
+## Deprecation plan for legacy Xamarin projects
 
-- The Xamarin.Android client (`AirplaneCheck`) and its instrumentation tests (`AirplaneCheckTest`) are frozen for new feature work. Expect only security updates or critical bug fixes.
-- Once all supported teams finish migrating to the web application, these projects will be archived. Plan future enhancements in the web codebase instead of this repository.
-- `PCLAsyncRequest` remains as a stub for reference; eliminate or replace it when the Xamarin solution is retired.
+- **AirplaneCheck**: Feature-frozen. Keep only for regression investigations until the web experience reaches feature parity, then schedule removal.
+- **AirplaneCheckTest**: Maintain as long as the mobile app ships; no further investment once the web client fully replaces it.
+- **PCLAsyncRequest**: Safe to delete once no other code depends on the experimental async wrappers.
 
-If you are planning cleanup or migration tasks, coordinate with the maintainers to ensure data flows are replicated in the web application before removing any Xamarin components.
-
-## Support
-
-Questions about the web application or the retirement timeline should be directed to the AirplaneCheck maintainers or the #airplanecheck channel. For historical Xamarin changes, include device details, Android version, and the Parse environment you are targeting.
+Documenting the status of these projects should streamline future cleanup once the migration is complete.
