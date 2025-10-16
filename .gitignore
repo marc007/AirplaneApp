@@ -1,4 +1,10 @@
 #################
+## Node / Web
+#################
+
+node_modules/
+
+#################
 ## Eclipse
 #################
 
@@ -215,12 +221,10 @@ pip-log.txt
 .mr.developer.cfg
 
 #############
-## Node / Web Tooling
+## Node.js
 #############
 
 node_modules/
-dist/
-coverage/
 web/node_modules/
+web/build/
 web/dist/
-web/.env

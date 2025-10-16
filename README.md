@@ -1,63 +1,83 @@
+
+## Web UI test harness
+
+A lightweight React-based test harness lives in `webapp/` to exercise caching logic and UI flows for the modern web experience. It ships with Jest and React Testing Library plus Parse request mocks so the suite runs entirely offline.
+
+### Running the tests
+
+1. `cd webapp`
+2. `npm install`
+3. `npm test`
+
+The tests validate data service caching behaviours (search, refresh, persistence) alongside user interactions (searching, refreshing, and viewing airplane details) for the new web app.
 # Airplane Check
 
-Airplane Check now ships with a modern browser-based client alongside the original Xamarin.Android
-application. The Xamarin solution remains in the repository for reference while the new web app
-acts as the primary entry point for ongoing development.
+Airplane Check queries FAA registration data stored in Parse and surfaces the results to end users. The project historically shipped as a Xamarin.Android mobile client, but a modern web application now provides the primary user experience going forward. This README explains the current state of the codebase, how to work with the legacy projects that still live here, and where the migration effort is heading.
 
-## Project Structure
+## Modern web application (preferred experience)
 
-- `web/` – Vite + React + TypeScript application that will replace the legacy Xamarin client.
-- `AirplaneCheck/`, `AirplaneCheckTest/`, `PCLAsyncRequest/` – Existing Xamarin projects kept for
-  historical context and potential logic reuse.
+A new web front end is under active development to replace the Xamarin.Android app. The web app connects to the same Parse backend, offers a dramatically lighter install footprint, and will be the home for all future feature work. Until the web source is consolidated into this repository, refer to the web project documentation for detailed build and deployment steps; this README will be updated again once those assets are colocated. Please direct new issues and enhancements to the web application backlog first.
 
-## Getting Started (Web)
+## Repository layout
 
-> Requires Node.js 18 or later.
+| Path | Description |
+| ---- | ----------- |
+| `AirplaneCheck/` | Legacy Xamarin.Android client that queries Parse for FAA aircraft registrations. |
+| `AirplaneCheckTest/` | Xamarin instrumentation project that exercises the Parse integration and cache behaviours on-device. |
+| `PCLAsyncRequest/` | Portable Class Library stub used for historical async request experimentation. |
+| `Components/` | Checked-in third-party Xamarin component packages (Parse SDK, Newtonsoft.Json) retained for archival builds. |
+| `packages/` | NuGet package cache referenced by the Xamarin solution. |
 
-1. Install the dependencies:
+## Working with the Xamarin.Android client (legacy)
 
-   ```bash
-   cd web
-   npm install
-   ```
+Although the mobile client is in maintenance mode, you may still need to build or debug it while the web app rollout completes.
 
-2. Copy the example environment file and supply your Parse credentials:
+### Prerequisites
 
-   ```bash
-   cp .env.example .env
-   # Edit .env to set VITE_PARSE_APP_ID, VITE_PARSE_JAVASCRIPT_KEY, VITE_PARSE_SERVER_URL
-   ```
+- Visual Studio with the Xamarin workload, or Xamarin Studio on macOS.
+- Android SDK platform tools (API level 19 or newer recommended).
+- An Android emulator or physical device with developer mode enabled.
 
-3. Launch the development server:
+### Initial setup
 
-   ```bash
-   npm run dev
-   ```
+1. Clone this repository and open `AirplaneCheck.sln` in your IDE.
+2. Restore NuGet packages if prompted so the Newtonsoft.Json dependency is available.
+3. Verify that external storage permissions are granted in your emulator/device. The app writes cache files to external storage when retrieving aircraft data.
 
-   The app will be available at the URL printed by Vite (typically `http://localhost:5173`).
+### Configuring Parse credentials
 
-### Environment Variables
+The Parse application and .NET keys are currently read inside [`AirplaneCheck/MainActivity.cs`](AirplaneCheck/MainActivity.cs) when `ParseClient.Initialize` is invoked. Before running against your own backend:
 
-The Parse JavaScript SDK is configured entirely through environment variables. Create a `.env`
-file (based on `.env.example`) and provide values for the following keys:
+1. Obtain the correct `ApplicationId` and `.NET Key` from your Parse dashboard.
+2. Update the `ParseClient.Initialize("<ApplicationId>", "<DotNetKey>");` call with your environment-specific values.
+3. Avoid committing production credentials—store them in a private secrets file or apply the values via build-time substitution in your CI pipeline.
 
-- `VITE_PARSE_APP_ID` – Parse Application ID
-- `VITE_PARSE_JAVASCRIPT_KEY` – Parse JavaScript key
-- `VITE_PARSE_SERVER_URL` – HTTPS URL to your Parse Server instance
+### Running the app
 
-These variables are read at build time by Vite and injected into the front-end application.
+1. In Visual Studio/Xamarin Studio, set **AirplaneCheck** as the startup project.
+2. Choose your target emulator or device and select **Run**/**Deploy**.
+3. Use the search field to enter an N-number (the app will automatically prefix `N` if omitted). Results are cached locally; use the overflow menu to refresh or clear cached entries.
 
-## Available NPM Scripts
+### Running instrumentation tests
 
-Inside the `web/` directory, the following scripts are available:
+1. Set **AirplaneCheckTest** as the startup project.
+2. Deploy to the same emulator or device. The NUnitLite runner will appear on launch.
+3. Execute the test suite to validate Parse connectivity and cache read/write behaviour.
 
-- `npm run dev` – Start Vite in development mode.
-- `npm run build` – Type-check and produce a production build.
-- `npm run preview` – Preview the production build locally.
-- `npm run lint` – Run ESLint on the project.
-- `npm run format` – Format the codebase with Prettier.
+## Caching behaviour
 
-## Legacy Xamarin Client
+Caching is handled by [`AirplaneDataService`](AirplaneCheck/DataServices/AirplaneDataService.cs) and orchestrated through [`AirplaneInfoData`](AirplaneCheck/AirplaneInfoData.cs):
 
-The Xamarin Android solution remains untouched. You can still open `AirplaneCheck.sln` in Visual
-Studio to inspect or run the original mobile implementation.
+- Cached records are serialized as JSON into `${ExternalStorage}/AirplaneCheck/airplaneinfo<ID>.json`.
+- `RefreshCache()` repopulates the in-memory list from all JSON files on disk; `ClearCache()` removes the files and clears the list.
+- `SaveAirplaneInfo()` assigns incremental IDs for new records and persists them back to disk so the app can render results offline.
+
+Understanding this flow is important when debugging stale results or when planning new persistence strategies in the web app.
+
+## Deprecation plan for legacy Xamarin projects
+
+- **AirplaneCheck**: Feature-frozen. Keep only for regression investigations until the web experience reaches feature parity, then schedule removal.
+- **AirplaneCheckTest**: Maintain as long as the mobile app ships; no further investment once the web client fully replaces it.
+- **PCLAsyncRequest**: Safe to delete once no other code depends on the experimental async wrappers.
+
+Documenting the status of these projects should streamline future cleanup once the migration is complete.
