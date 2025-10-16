@@ -219,3 +219,12 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
+
+#############
+## Node.js
+#############
+
+node_modules/
+web/node_modules/
+web/build/
+web/dist/
