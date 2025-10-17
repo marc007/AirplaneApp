@@ -1,12 +1,16 @@
-import { useState } from 'react';
-import PropTypes from 'prop-types';
-import { normalizeNNumber } from '../utils/nNumber.js';
+import { ChangeEvent, FormEvent, useState } from 'react';
+import { normalizeNNumber } from '../utils/nNumber';
 
-function SearchForm({ onSearch, loading }) {
+interface SearchFormProps {
+  onSearch: (tailNumber: string) => void;
+  loading?: boolean;
+}
+
+function SearchForm({ onSearch, loading = false }: SearchFormProps): JSX.Element {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (event) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalized = normalizeNNumber(input);
     if (!normalized) {
@@ -16,6 +20,13 @@ function SearchForm({ onSearch, loading }) {
     setError('');
     onSearch(normalized);
     setInput(normalized);
+  };
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setInput(event.target.value);
+    if (error) {
+      setError('');
+    }
   };
 
   return (
@@ -32,12 +43,7 @@ function SearchForm({ onSearch, loading }) {
           className="search-input"
           placeholder="Enter N-number (e.g. N12345)"
           value={input}
-          onChange={(event) => {
-            setInput(event.target.value);
-            if (error) {
-              setError('');
-            }
-          }}
+          onChange={handleChange}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? 'nnumber-error' : undefined}
         />
@@ -55,14 +61,5 @@ function SearchForm({ onSearch, loading }) {
     </form>
   );
 }
-
-SearchForm.propTypes = {
-  onSearch: PropTypes.func.isRequired,
-  loading: PropTypes.bool
-};
-
-SearchForm.defaultProps = {
-  loading: false
-};
 
 export default SearchForm;

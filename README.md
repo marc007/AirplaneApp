@@ -5,7 +5,7 @@ Airplane Check surfaces FAA registration data via a modern TypeScript/Express AP
 ## Overview
 
 - **Backend (`server/`)** – Node.js (Express + Prisma) API, dataset ingestion pipeline, and background scheduler for FAA's releasable aircraft archive.
-- **Frontend (`web/`)** – Vite + React application that consumes the REST API. The `webapp/` folder remains as a Jest harness for data-service experiments.
+- **Frontend (`web/`)** – Vite + React application that consumes the REST API (defaulting to the Azure deployment at `https://airplanecheck-api.azurewebsites.net`). The `webapp/` folder remains as a Jest harness for data-service experiments.
 - **Legacy clients** – `AirplaneCheck/`, `AirplaneCheckTest/`, and `PCLAsyncRequest/` are the Parse-based Xamarin artifacts kept for regression investigations during the migration.
 - **Infrastructure helpers** – `docker-compose.yml` provisions Postgres and the backend locally, while `Components/` and `packages/` cache Xamarin dependencies.
 
@@ -136,7 +136,7 @@ npm run ingest:faa
 
 | Variable | Required | Description | Default / Example |
 | -------- | -------- | ----------- | ----------------- |
-| `VITE_API_BASE_URL` | **Yes** | Base URL of the backend API without a trailing slash. | `https://api.airplanecheck.example.com` |
+| `VITE_API_BASE_URL` | **Yes** | Base URL of the backend API without a trailing slash. | `https://airplanecheck-api.azurewebsites.net` |
 | `VITE_PARSE_APP_ID` | No (legacy) | Only required when running the deprecated Parse data path in the legacy clients. | *(unset)* |
 | `VITE_PARSE_JAVASCRIPT_KEY` | No (legacy) | Legacy Parse JavaScript key for the deprecated clients. | *(unset)* |
 | `VITE_PARSE_SERVER_URL` | No (legacy) | Legacy Parse server URL used by the Xamarin harness. | *(unset)* |

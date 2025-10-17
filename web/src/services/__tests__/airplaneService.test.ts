@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const API_BASE_URL = process.env.VITE_API_BASE_URL || 'https://api.test';
+type MockResponse = {
+  ok: boolean;
+  status: number;
+  text: () => Promise<string>;
+};
 
-const createResponse = (payload, status = 200) => ({
+const API_BASE_URL = 'https://api.test';
+
+const createResponse = <TPayload>(payload: TPayload, status = 200): MockResponse => ({
   ok: status >= 200 && status < 300,
   status,
   text: async () => (payload !== undefined ? JSON.stringify(payload) : '')
@@ -10,6 +16,8 @@ const createResponse = (payload, status = 200) => ({
 
 beforeEach(() => {
   vi.resetModules();
+  vi.unstubAllEnvs();
+  vi.stubEnv('VITE_API_BASE_URL', API_BASE_URL);
   if (typeof window !== 'undefined' && window.localStorage) {
     window.localStorage.clear();
   }
@@ -17,9 +25,10 @@ beforeEach(() => {
 
 afterEach(() => {
   if ('fetch' in globalThis) {
-    delete globalThis.fetch;
+    delete (globalThis as { fetch?: typeof fetch }).fetch;
   }
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('airplaneService', () => {
@@ -72,7 +81,7 @@ describe('airplaneService', () => {
       filters: {}
     };
 
-    const fetchMock = vi.fn((url) => {
+    const fetchMock = vi.fn((url: string) => {
       if (url === `${API_BASE_URL}/api/airplanes/refresh-status`) {
         return Promise.resolve(createResponse(refreshStatusPayload));
       }
@@ -83,9 +92,9 @@ describe('airplaneService', () => {
       throw new Error(`Unexpected request for ${url}`);
     });
 
-    globalThis.fetch = fetchMock;
+    (globalThis as { fetch?: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
 
-    const { clearSearchCache, searchAirplanes } = await import('../airplaneService.js');
+    const { clearSearchCache, searchAirplanes } = await import('../airplaneService');
     clearSearchCache();
 
     const result = await searchAirplanes('N12345');
@@ -101,7 +110,7 @@ describe('airplaneService', () => {
     expect(airplane.certificationIssueDate.iso).toBe('2020-01-15T00:00:00.000Z');
     expect(airplane.owners).toHaveLength(1);
     expect(airplane.owners[0].location).toBe('Seattle, WA, US');
-    expect(result.refreshStatus.dataVersion).toBe('2024.05');
+    expect(result.refreshStatus?.dataVersion).toBe('2024.05');
 
     const cached = await searchAirplanes('12345');
     expect(cached.fromCache).toBe(true);
@@ -117,7 +126,7 @@ describe('airplaneService', () => {
       totals: null
     };
 
-    const fetchMock = vi.fn((url) => {
+    const fetchMock = vi.fn((url: string) => {
       if (url === `${API_BASE_URL}/api/airplanes/refresh-status`) {
         return Promise.resolve(createResponse(refreshStatusPayload));
       }
@@ -125,9 +134,9 @@ describe('airplaneService', () => {
       throw new Error(`Unexpected request for ${url}`);
     });
 
-    globalThis.fetch = fetchMock;
+    (globalThis as { fetch?: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
 
-    const { searchAirplanes } = await import('../airplaneService.js');
+    const { searchAirplanes } = await import('../airplaneService');
 
     const result = await searchAirplanes('');
 
@@ -135,7 +144,7 @@ describe('airplaneService', () => {
     expect(result.airplanes).toHaveLength(0);
     expect(result.fromCache).toBe(false);
     expect(result.meta.total).toBe(0);
-    expect(result.refreshStatus.status).toBe('NOT_AVAILABLE');
+    expect(result.refreshStatus?.status).toBe('NOT_AVAILABLE');
   });
 
   it('throws descriptive errors when the API responds with an error payload', async () => {
@@ -150,7 +159,7 @@ describe('airplaneService', () => {
       message: 'At least one search filter is required'
     };
 
-    const fetchMock = vi.fn((url) => {
+    const fetchMock = vi.fn((url: string) => {
       if (url === `${API_BASE_URL}/api/airplanes/refresh-status`) {
         return Promise.resolve(createResponse(refreshStatusPayload));
       }
@@ -161,9 +170,9 @@ describe('airplaneService', () => {
       throw new Error(`Unexpected request for ${url}`);
     });
 
-    globalThis.fetch = fetchMock;
+    (globalThis as { fetch?: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
 
-    const { searchAirplanes } = await import('../airplaneService.js');
+    const { searchAirplanes } = await import('../airplaneService');
 
     await expect(searchAirplanes('N00000')).rejects.toThrow('At least one search filter is required');
     expect(fetchMock).toHaveBeenCalledTimes(2);
