@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { getConfig } from './config';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { loggingMiddleware } from './middleware/logging';
+import airplanesRouter from './routes/api/airplanes';
 import healthRouter from './routes/health';
 
 export const createApp = () => {
@@ -16,6 +17,7 @@ export const createApp = () => {
   app.use(express.json());
   app.use(loggingMiddleware);
 
+  app.use('/api/airplanes', airplanesRouter);
   app.use('/health', healthRouter);
 
   app.use(notFoundHandler);
