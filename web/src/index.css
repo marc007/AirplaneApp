@@ -321,6 +321,52 @@ a:hover {
   color: #0f172a;
 }
 
+.detail-card__actions {
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.detail-card__owners {
+  margin-top: 2rem;
+}
+
+.detail-card__owners ul {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-card__owners li {
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.detail-card__owners dl {
+  margin: 0.75rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.detail-card__owners dt {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.detail-card__owners dd {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
 .page-loading,
 .page-error {
   background: #ffffff;

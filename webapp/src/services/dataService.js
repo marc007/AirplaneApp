@@ -3,12 +3,26 @@ import { fetchAirplanes } from './parseClient';
 export const AIRPLANE_CACHE_KEY = 'airplaneCache';
 
 const normalisePlane = (plane, index, requestedTailNumber) => {
-  const identifier = plane.id ?? plane.objectId ?? plane.objectID ?? index + 1;
-  const tailNumber = plane.nnumber ?? plane.tailNumber ?? requestedTailNumber;
+  const identifier = plane.id ?? plane.objectId ?? plane.objectID ?? plane.tailNumber ?? index + 1;
+  const tailNumber = plane.tailNumber ?? plane.nnumber ?? requestedTailNumber;
   const manufacturer =
     plane.manufacturer ?? plane.mfr ?? plane.make ?? plane.manufacturerName ?? '';
   const model = plane.model ?? plane.modelName ?? plane.aircraftModel ?? '';
-  const status = plane.status ?? plane.statusCode ?? plane.aircraftStatus ?? 'Unknown';
+  const status = plane.statusCode ?? plane.status ?? plane.aircraftStatus ?? 'Unknown';
+  const expirationDate = plane.expirationDate ?? null;
+  const owners = Array.isArray(plane.owners)
+    ? plane.owners.map((owner) => {
+        const locationParts = [owner.city, owner.state, owner.country]
+          .filter((part) => Boolean(part && String(part).trim()))
+          .join(', ');
+        return {
+          name: owner.name ?? '',
+          location: locationParts || null,
+          ownershipType: owner.ownershipType ?? null,
+          lastActionDate: owner.lastActionDate ?? null
+        };
+      })
+    : [];
 
   return {
     ...plane,
@@ -16,7 +30,9 @@ const normalisePlane = (plane, index, requestedTailNumber) => {
     nnumber: tailNumber,
     manufacturer,
     model,
-    status
+    status,
+    expirationDate,
+    owners
   };
 };
 
@@ -28,10 +44,17 @@ export class DataService {
 
     this.storage = storage;
     this.airplaneInfos = [];
+    this.lastMeta = null;
+    this.lastFilters = null;
+    this.lastRefreshStatus = null;
     this.refreshCache();
   }
 
   refreshCache() {
+    this.lastMeta = null;
+    this.lastFilters = null;
+    this.lastRefreshStatus = null;
+
     const serialised = this.storage.getItem(AIRPLANE_CACHE_KEY);
     if (serialised) {
       try {
@@ -104,6 +127,9 @@ export class DataService {
 
   clearCache() {
     this.airplaneInfos = [];
+    this.lastMeta = null;
+    this.lastFilters = null;
+    this.lastRefreshStatus = null;
     if (typeof this.storage.removeItem === 'function') {
       this.storage.removeItem(AIRPLANE_CACHE_KEY);
     } else {
@@ -125,12 +151,21 @@ export class DataService {
       ? trimmed.toUpperCase()
       : `N${trimmed.toUpperCase()}`;
 
-    const results = await fetchAirplanes(normalisedTailNumber);
-    const normalizedResults = (Array.isArray(results) ? results : []).map((plane, index) =>
+    const payload = await fetchAirplanes(normalisedTailNumber);
+    const data = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+      ? payload
+      : [];
+
+    const normalizedResults = data.map((plane, index) =>
       normalisePlane(plane, index, normalisedTailNumber)
     );
 
     this.airplaneInfos = normalizedResults;
+    this.lastMeta = payload?.meta ?? null;
+    this.lastFilters = payload?.filters ?? null;
+    this.lastRefreshStatus = payload?.refreshStatus ?? null;
     this.persist();
 
     return this.getAirplaneInfos();
