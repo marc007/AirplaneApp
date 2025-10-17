@@ -1,0 +1,4 @@
+"N-NUMBER","NAME","STREET","STREET2","CITY","STATE","ZIP CODE","REGION","COUNTY","COUNTRY","LAST ACTION DATE","OWNERSHIP TYPE"
+"N12345","John Doe","123 Elm St","","Springfield","IL","62704","GL","SANGAMON","US","20231025","Individual"
+"N98765","FlyHigh Airlines","1 Aviation Way","Suite 500","New York","NY","10001","EA","NEW YORK","US","20240115","Corporation"
+"N98765","Sky Leasing","88 Finance Rd","","New York","NY","10005","EA","NEW YORK","US","20240201","Corporation"
