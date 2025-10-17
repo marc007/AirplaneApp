@@ -1,9 +1,9 @@
-export function normalizeNNumber(input) {
+export function normalizeNNumber(input: unknown): string {
   if (input === null || input === undefined) {
     return '';
   }
 
-  let value = String(input)
+  const value = String(input)
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');

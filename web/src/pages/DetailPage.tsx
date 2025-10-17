@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import StatusIndicator, { getStatusMeta } from '../components/StatusIndicator.jsx';
-import { getAirplaneDetails } from '../services/airplaneService.js';
-import { normalizeNNumber } from '../utils/nNumber.js';
+import StatusIndicator, { getStatusMeta } from '../components/StatusIndicator';
+import { ApiError, getAirplaneDetails } from '../services/airplaneService';
+import { normalizeNNumber } from '../utils/nNumber';
+import type { Airplane, RefreshStatus, ResultMetaSnapshot } from '../types/airplane';
+
+type DetailStatus = 'loading' | 'success' | 'error';
+
+interface FetchDetailOptions {
+  forceRefresh?: boolean;
+  showLoading?: boolean;
+}
+
+interface DetailLocationState {
+  airplane?: Airplane;
+  resultMeta?: ResultMetaSnapshot;
+}
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -12,12 +25,12 @@ const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   minute: 'numeric'
 });
 
-function formatDateTime(value) {
+function formatDateTime(value: string | null): string {
   if (!value) {
     return '';
   }
 
-  const date = value instanceof Date ? value : new Date(value);
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return '';
   }
@@ -25,34 +38,39 @@ function formatDateTime(value) {
   return dateTimeFormatter.format(date);
 }
 
-function DetailPage() {
-  const { tailNumber: paramTailNumber } = useParams();
+function DetailPage(): JSX.Element {
+  const { tailNumber: paramTailNumber } = useParams<{ tailNumber?: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
+  const location = useLocation<DetailLocationState | null>();
   const initialAirplane = location.state?.airplane ?? null;
   const initialResultMeta = location.state?.resultMeta ?? null;
 
-  const normalizedTailNumber = useMemo(() => normalizeNNumber(paramTailNumber), [paramTailNumber]);
+  const normalizedTailNumber = useMemo(
+    () => normalizeNNumber(paramTailNumber ?? ''),
+    [paramTailNumber]
+  );
 
   const isMountedRef = useRef(true);
-  useEffect(() => () => {
-    isMountedRef.current = false;
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
-  const [airplane, setAirplane] = useState(initialAirplane);
-  const [status, setStatus] = useState(initialAirplane ? 'success' : 'loading');
-  const [error, setError] = useState(null);
-  const [fromCache, setFromCache] = useState(Boolean(initialResultMeta?.fromCache));
-  const [receivedAt, setReceivedAt] = useState(initialResultMeta?.receivedAt ?? null);
-  const [refreshStatus, setRefreshStatus] = useState(null);
+  const [airplane, setAirplane] = useState<Airplane | null>(initialAirplane);
+  const [status, setStatus] = useState<DetailStatus>(initialAirplane ? 'success' : 'loading');
+  const [error, setError] = useState<Error | ApiError | null>(null);
+  const [fromCache, setFromCache] = useState<boolean>(Boolean(initialResultMeta?.fromCache));
+  const [receivedAt, setReceivedAt] = useState<string | null>(initialResultMeta?.receivedAt ?? null);
+  const [refreshStatus, setRefreshStatus] = useState<RefreshStatus | null>(null);
 
-  const airplaneRef = useRef(initialAirplane);
+  const airplaneRef = useRef<Airplane | null>(initialAirplane);
   useEffect(() => {
     airplaneRef.current = airplane;
   }, [airplane]);
 
   const fetchDetails = useCallback(
-    async ({ forceRefresh = false, showLoading = true } = {}) => {
+    async ({ forceRefresh = false, showLoading = true }: FetchDetailOptions = {}) => {
       if (!normalizedTailNumber) {
         const invalidError = new Error('The requested tail number is invalid.');
         if (isMountedRef.current) {
@@ -93,7 +111,8 @@ function DetailPage() {
         if (!isMountedRef.current) {
           return;
         }
-        setError(err);
+        const caught = err instanceof Error ? err : new Error('Unable to load airplane details.');
+        setError(caught);
         if (!airplaneRef.current) {
           setStatus('error');
         } else {
@@ -105,7 +124,7 @@ function DetailPage() {
   );
 
   useEffect(() => {
-    fetchDetails({ forceRefresh: false, showLoading: !initialAirplane });
+    void fetchDetails({ forceRefresh: false, showLoading: !initialAirplane });
   }, [fetchDetails, initialAirplane]);
 
   const handleBack = useCallback(() => {
@@ -117,7 +136,7 @@ function DetailPage() {
   }, [navigate]);
 
   const handleRefresh = useCallback(() => {
-    fetchDetails({ forceRefresh: true, showLoading: true });
+    void fetchDetails({ forceRefresh: true, showLoading: true });
   }, [fetchDetails]);
 
   const datasetSummary = useMemo(() => {
@@ -125,7 +144,7 @@ function DetailPage() {
       return null;
     }
 
-    const parts = [];
+    const parts: string[] = [];
     if (refreshStatus.status) {
       parts.push(refreshStatus.status);
     }
@@ -255,7 +274,9 @@ function DetailPage() {
             <ul>
               {airplane.owners.map((owner, index) => (
                 <li key={`${owner.name || 'owner'}-${index}`}>
-                  <p><strong>{owner.name || 'Unknown owner'}</strong></p>
+                  <p>
+                    <strong>{owner.name || 'Unknown owner'}</strong>
+                  </p>
                   <dl>
                     <div>
                       <dt>Location</dt>
@@ -290,9 +311,7 @@ function DetailPage() {
           Cached data is displayed. Use “Refresh data” to request the latest information from the FAA API.
         </p>
       )}
-      {receivedAtDisplay && (
-        <p className="helper-text">Data retrieved {receivedAtDisplay}.</p>
-      )}
+      {receivedAtDisplay && <p className="helper-text">Data retrieved {receivedAtDisplay}.</p>}
       {refreshStatus && (
         <div className="status-banner dataset-status" role="status" aria-live="polite">
           <div>

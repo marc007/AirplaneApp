@@ -1,8 +1,13 @@
-import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import StatusIndicator from './StatusIndicator.jsx';
+import type { Airplane, ResultMetaSnapshot } from '../types/airplane';
+import StatusIndicator from './StatusIndicator';
 
-function ResultsList({ airplanes, resultMeta }) {
+interface ResultsListProps {
+  airplanes: Airplane[];
+  resultMeta: ResultMetaSnapshot | null;
+}
+
+function ResultsList({ airplanes, resultMeta }: ResultsListProps): JSX.Element {
   return (
     <ul className="results-grid" role="list">
       {airplanes.map((airplane) => {
@@ -14,7 +19,7 @@ function ResultsList({ airplanes, resultMeta }) {
         const owner = airplane.primaryOwner;
 
         return (
-          <li key={airplane.id || airplane.tailNumber} className="results-grid__item">
+          <li key={airplane.id} className="results-grid__item">
             <Link
               to={`/airplanes/${encodeURIComponent(airplane.tailNumber)}`}
               state={{ airplane, resultMeta }}
@@ -23,7 +28,9 @@ function ResultsList({ airplanes, resultMeta }) {
               <StatusIndicator statusCode={airplane.statusCode} showLabel />
               <div className="result-card__meta">
                 <span className="result-card__title">{airplane.tailNumber}</span>
-                <span className="result-card__subtitle">{manufacturerLine || 'Manufacturer unavailable'}</span>
+                <span className="result-card__subtitle">
+                  {manufacturerLine || 'Manufacturer unavailable'}
+                </span>
                 {owner ? (
                   <span className="result-card__owner">
                     Owner: {owner.name || 'Unavailable'}
@@ -41,38 +48,5 @@ function ResultsList({ airplanes, resultMeta }) {
     </ul>
   );
 }
-
-ResultsList.propTypes = {
-  airplanes: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-      tailNumber: PropTypes.string.isRequired,
-      manufacturer: PropTypes.string,
-      model: PropTypes.string,
-      statusCode: PropTypes.string,
-      expirationDate: PropTypes.shape({
-        iso: PropTypes.string,
-        display: PropTypes.string
-      }),
-      primaryOwner: PropTypes.shape({
-        name: PropTypes.string,
-        location: PropTypes.string,
-        lastActionDate: PropTypes.shape({
-          iso: PropTypes.string,
-          display: PropTypes.string
-        })
-      })
-    })
-  ),
-  resultMeta: PropTypes.shape({
-    fromCache: PropTypes.bool,
-    receivedAt: PropTypes.string
-  })
-};
-
-ResultsList.defaultProps = {
-  airplanes: [],
-  resultMeta: null
-};
 
 export default ResultsList;

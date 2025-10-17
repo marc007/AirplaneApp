@@ -1,72 +1,29 @@
-import Parse, { parseConfig } from './lib/parseClient';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import DetailPage from './pages/DetailPage';
+import SearchPage from './pages/SearchPage';
 
-const formatValue = (value: string) => (value ? value : 'not set');
-
-const missingEnvKeys = [
-  ['VITE_PARSE_APP_ID', parseConfig.appId],
-  ['VITE_PARSE_JAVASCRIPT_KEY', parseConfig.javascriptKey],
-  ['VITE_PARSE_SERVER_URL', parseConfig.serverURL]
-]
-  .filter(([, value]) => !value)
-  .map(([key]) => key);
-
-const maskedJavascriptKey =
-  parseConfig.javascriptKey && parseConfig.isConfigured
-    ? '•'.repeat(Math.min(10, parseConfig.javascriptKey.length))
-    : 'not set';
-
-const sdkVersion = Parse.VERSION ?? 'unknown';
-
-const statusMessage = parseConfig.isConfigured
-  ? 'The Parse JavaScript SDK is ready to query FAA aircraft data.'
-  : `Provide the missing environment variables (${missingEnvKeys.join(', ')}) in a .env file to enable Parse connectivity.`;
-
-function App() {
+function App(): JSX.Element {
   return (
-    <main className="app">
-      <header>
-        <h1>Airplane Check</h1>
-        <p>Your browser-based gateway to FAA aircraft data.</p>
-      </header>
-
-      <section>
-        <h2>Parse SDK</h2>
-        <p>
-          {statusMessage}{' '}
-          <span>
-            Update <code>.env</code> based on <code>.env.example</code> to provide your Parse App
-            credentials.
-          </span>
-        </p>
-        <dl>
-          <div>
-            <dt>SDK Version</dt>
-            <dd>{sdkVersion}</dd>
+    <BrowserRouter>
+      <div className="app-shell">
+        <header className="app-header">
+          <div className="app-header__content">
+            <h1 className="app-title">Airplane Check</h1>
+            <p className="app-subtitle">Search FAA registrations by N-number</p>
           </div>
-          <div>
-            <dt>Application ID</dt>
-            <dd>{formatValue(parseConfig.appId)}</dd>
-          </div>
-          <div>
-            <dt>Javascript Key</dt>
-            <dd>{maskedJavascriptKey}</dd>
-          </div>
-          <div>
-            <dt>Server URL</dt>
-            <dd>{formatValue(parseConfig.serverURL)}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section>
-        <h2>Next Steps</h2>
-        <ol>
-          <li>Create screens that mirror the Xamarin client experience.</li>
-          <li>Add data services that call Parse classes for aircraft records.</li>
-          <li>Replace Xamarin references with shared business logic where possible.</li>
-        </ol>
-      </section>
-    </main>
+        </header>
+        <main className="app-main">
+          <Routes>
+            <Route path="/" element={<SearchPage />} />
+            <Route path="/airplanes/:tailNumber" element={<DetailPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+        <footer className="app-footer">
+          <small>Data provided by the Airplane Check Azure-hosted FAA API.</small>
+        </footer>
+      </div>
+    </BrowserRouter>
   );
 }
 

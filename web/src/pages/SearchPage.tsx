@@ -1,7 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import SearchForm from '../components/SearchForm.jsx';
-import ResultsList from '../components/ResultsList.jsx';
-import { getRefreshStatus, searchAirplanes } from '../services/airplaneService.js';
+import ResultsList from '../components/ResultsList';
+import SearchForm from '../components/SearchForm';
+import { ApiError, getRefreshStatus, searchAirplanes } from '../services/airplaneService';
+import type {
+  Airplane,
+  NormalizedFilters,
+  RefreshStatus,
+  ResultMetaSnapshot,
+  SearchMeta
+} from '../types/airplane';
+
+type SearchStatus = 'idle' | 'loading' | 'error' | 'empty' | 'success';
+
+interface SearchResultsState {
+  airplanes: Airplane[];
+  meta: SearchMeta | null;
+  filters: NormalizedFilters | null;
+  fromCache: boolean;
+  receivedAt: string | null;
+}
+
+interface PerformSearchOptions {
+  forceRefresh?: boolean;
+  updateLastQuery?: boolean;
+}
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -11,7 +33,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   minute: 'numeric'
 });
 
-const createInitialResults = () => ({
+const createInitialResults = (): SearchResultsState => ({
   airplanes: [],
   meta: null,
   filters: null,
@@ -19,12 +41,12 @@ const createInitialResults = () => ({
   receivedAt: null
 });
 
-function formatDateTime(value) {
+function formatDateTime(value: string | null): string {
   if (!value) {
     return '';
   }
 
-  const date = value instanceof Date ? value : new Date(value);
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return '';
   }
@@ -32,13 +54,13 @@ function formatDateTime(value) {
   return dateTimeFormatter.format(date);
 }
 
-function SearchPage() {
-  const [results, setResults] = useState(() => createInitialResults());
-  const [status, setStatus] = useState('idle');
-  const [error, setError] = useState(null);
+function SearchPage(): JSX.Element {
+  const [results, setResults] = useState<SearchResultsState>(() => createInitialResults());
+  const [status, setStatus] = useState<SearchStatus>('idle');
+  const [error, setError] = useState<Error | ApiError | null>(null);
   const [lastQuery, setLastQuery] = useState('');
-  const [refreshStatus, setRefreshStatus] = useState(null);
-  const [refreshError, setRefreshError] = useState(null);
+  const [refreshStatus, setRefreshStatus] = useState<RefreshStatus | null>(null);
+  const [refreshError, setRefreshError] = useState<Error | ApiError | null>(null);
   const [refreshLoading, setRefreshLoading] = useState(false);
 
   useEffect(() => {
@@ -53,7 +75,8 @@ function SearchPage() {
         }
       } catch (err) {
         if (!ignore) {
-          setRefreshError(err);
+          const caught = err instanceof Error ? err : new Error('Unable to load dataset metadata.');
+          setRefreshError(caught);
         }
       }
     }
@@ -66,7 +89,10 @@ function SearchPage() {
   }, []);
 
   const performSearch = useCallback(
-    async (tailNumber, { forceRefresh: shouldForceRefresh = false, updateLastQuery = true } = {}) => {
+    async (
+      tailNumber: string,
+      { forceRefresh: shouldForceRefresh = false, updateLastQuery = true }: PerformSearchOptions = {}
+    ) => {
       if (!tailNumber) {
         setResults(createInitialResults());
         setStatus('idle');
@@ -97,17 +123,18 @@ function SearchPage() {
 
         setStatus(response.airplanes.length > 0 ? 'success' : 'empty');
       } catch (err) {
+        const caught = err instanceof Error ? err : new Error('Unable to complete the search.');
         setResults(createInitialResults());
         setStatus('error');
-        setError(err);
+        setError(caught);
       }
     },
     []
   );
 
   const handleSearch = useCallback(
-    (normalizedNNumber) => {
-      performSearch(normalizedNNumber, { forceRefresh: false, updateLastQuery: true });
+    (normalizedNNumber: string) => {
+      void performSearch(normalizedNNumber, { forceRefresh: false, updateLastQuery: true });
     },
     [performSearch]
   );
@@ -124,7 +151,8 @@ function SearchPage() {
         await performSearch(lastQuery, { forceRefresh: true, updateLastQuery: false });
       }
     } catch (err) {
-      setRefreshError(err);
+      const caught = err instanceof Error ? err : new Error('Unable to refresh dataset metadata.');
+      setRefreshError(caught);
     } finally {
       setRefreshLoading(false);
     }
@@ -135,7 +163,7 @@ function SearchPage() {
       return null;
     }
 
-    const parts = [];
+    const parts: string[] = [];
 
     if (refreshStatus.status) {
       parts.push(refreshStatus.status);
@@ -154,8 +182,21 @@ function SearchPage() {
     return parts.join(' • ');
   }, [refreshStatus]);
 
-  const receivedAtDisplay = useMemo(() => formatDateTime(results.receivedAt), [results.receivedAt]);
+  const receivedAtDisplay = useMemo(
+    () => formatDateTime(results.receivedAt),
+    [results.receivedAt]
+  );
   const totalResults = results.meta?.total ?? results.airplanes.length;
+  const errorDetails =
+    error instanceof ApiError && typeof error.details === 'string' ? error.details : null;
+
+  let resultMeta: ResultMetaSnapshot | null = null;
+  if (status === 'success') {
+    resultMeta = {
+      fromCache: results.fromCache,
+      receivedAt: results.receivedAt
+    };
+  }
 
   return (
     <section className="search-page">
@@ -202,10 +243,10 @@ function SearchPage() {
           <strong>We could not complete the search.</strong>
           <br />
           {error?.message || 'Please try again in a few moments.'}
-          {error?.details && typeof error.details === 'string' && (
+          {errorDetails && (
             <>
               <br />
-              {error.details}
+              {errorDetails}
             </>
           )}
         </div>
@@ -235,13 +276,7 @@ function SearchPage() {
               Cached results were used. Use “Refresh data” to request the latest information.
             </p>
           )}
-          <ResultsList
-            airplanes={results.airplanes}
-            resultMeta={{
-              fromCache: results.fromCache,
-              receivedAt: results.receivedAt
-            }}
-          />
+          <ResultsList airplanes={results.airplanes} resultMeta={resultMeta} />
         </>
       )}
     </section>

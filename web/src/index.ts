@@ -1,2 +1,2 @@
-export * from './models/AirplaneInfo';
-export * from './services/AirplaneDataService';
+export * from './services/airplaneService';
+export * from './types/airplane';
