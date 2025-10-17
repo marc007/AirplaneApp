@@ -10,7 +10,9 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "jest --runInBand",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
+    "prisma:seed": "prisma db seed",
     "ingest:faa": "tsx src/cli/ingestReleasableAircraft.ts"
   },
   "dependencies": {
@@ -41,5 +43,8 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.7.1",
     "typescript": "^5.4.5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

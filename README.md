@@ -89,6 +89,10 @@ Prerequisites: Node.js 20 LTS, npm 10+, a running Postgres 14+ instance, and acc
    npm run prisma:migrate
    ```
 
+   > Deploying to Azure Postgres? Use `npm run prisma:deploy` and follow the
+   > checklist in [`server/docs/azure-migrations.md`](server/docs/azure-migrations.md)
+   > to ensure the `pg_trgm` extension and performance indexes are in place.
+
 5. Launch the API in watch mode:
 
    ```bash
