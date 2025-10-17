@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import { FAARefreshService, RefreshInProgressError } from '../src/services/faaRefreshService';
 import type { IngestionStats, ReleasableAircraftRepository } from '../src/ingest/types';
@@ -7,7 +7,6 @@ type PrismaMock = {
   datasetIngestion: {
     findFirst: jest.Mock;
   };
-  $transaction: jest.Mock;
 };
 
 type RepositoryMocks = {
@@ -16,16 +15,26 @@ type RepositoryMocks = {
   failIngestion: jest.Mock;
 };
 
-const createRepository = (overrides: Partial<RepositoryMocks> = {}): ReleasableAircraftRepository => ({
+const createRepository = (
+  overrides: Partial<RepositoryMocks> = {},
+): ReleasableAircraftRepository => ({
   startIngestion: overrides.startIngestion ?? jest.fn(),
   completeIngestion: overrides.completeIngestion ?? jest.fn(),
   failIngestion: overrides.failIngestion ?? jest.fn(),
-  upsertManufacturer: jest.fn(),
-  upsertAircraftModel: jest.fn(),
-  upsertEngine: jest.fn(),
-  upsertAircraft: jest.fn(),
-  upsertOwner: jest.fn(),
-  upsertAircraftOwner: jest.fn(),
+  prepareIngestion: jest.fn(),
+  stageManufacturers: jest.fn(),
+  mergeManufacturers: jest.fn(),
+  stageAircraftModels: jest.fn(),
+  mergeAircraftModels: jest.fn(),
+  stageEngines: jest.fn(),
+  mergeEngines: jest.fn(),
+  stageAircraft: jest.fn(),
+  mergeAircraft: jest.fn(),
+  stageOwners: jest.fn(),
+  mergeOwners: jest.fn(),
+  stageAircraftOwners: jest.fn(),
+  mergeAircraftOwners: jest.fn(),
+  cleanupIngestion: jest.fn(),
 });
 
 describe('FAARefreshService', () => {
@@ -39,9 +48,7 @@ describe('FAARefreshService', () => {
   };
 
   let prismaMock: PrismaMock;
-  let transactionClient: Prisma.TransactionClient;
   let rootRepositoryMocks: RepositoryMocks;
-  let transactionRepositoryMocks: RepositoryMocks;
   let downloadDatasetMock: jest.Mock;
   let ingestArchiveMock: jest.Mock;
   let repositoryFactoryMock: jest.Mock;
@@ -55,21 +62,12 @@ describe('FAARefreshService', () => {
       datasetIngestion: {
         findFirst: jest.fn(),
       },
-      $transaction: jest.fn(),
     } as unknown as PrismaMock;
-
-    transactionClient = { __tx: true } as unknown as Prisma.TransactionClient;
 
     rootRepositoryMocks = {
       startIngestion: jest.fn().mockResolvedValue({ id: 99 }),
       completeIngestion: jest.fn().mockResolvedValue(undefined),
       failIngestion: jest.fn().mockResolvedValue(undefined),
-    };
-
-    transactionRepositoryMocks = {
-      startIngestion: jest.fn(),
-      completeIngestion: jest.fn(),
-      failIngestion: jest.fn(),
     };
 
     downloadDatasetMock = jest.fn().mockResolvedValue({ dataVersion: 'v1' });
@@ -84,15 +82,8 @@ describe('FAARefreshService', () => {
         return createRepository(rootRepositoryMocks);
       }
 
-      return createRepository(transactionRepositoryMocks);
+      return createRepository();
     });
-
-    prismaMock.$transaction.mockImplementation(
-      async (
-        callback: (client: Prisma.TransactionClient) => Promise<unknown>,
-        _options?: unknown,
-      ) => callback(transactionClient),
-    );
   });
 
   const createService = () =>
@@ -117,10 +108,9 @@ describe('FAARefreshService', () => {
       ingestArchive: ingestArchiveMock,
       repositoryFactory: repositoryFactoryMock,
       metrics,
-      transactionTimeoutMs: 5000,
     });
 
-  it('downloads the dataset, ingests it within a transaction, and records completion metadata', async () => {
+  it('downloads the dataset, ingests it, and records completion metadata', async () => {
     const service = createService();
 
     const result = await service.refresh('manual');
@@ -138,7 +128,6 @@ describe('FAARefreshService', () => {
       }),
     );
 
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(ingestArchiveMock).toHaveBeenCalledWith({
       archivePath: expect.stringContaining('ReleasableAircraft.zip'),
       repository: expect.any(Object),

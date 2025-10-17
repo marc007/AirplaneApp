@@ -15,9 +15,13 @@ export type IngestionStats = {
   ownerLinks: number;
 };
 
-export type AircraftModelInput = {
+export type ManufacturerStageInput = {
+  name: string;
+};
+
+export type AircraftModelStageInput = {
   code: string;
-  manufacturerId: number;
+  manufacturerName: string;
   modelName: string;
   typeAircraft: string | null;
   typeEngine: string | null;
@@ -29,7 +33,7 @@ export type AircraftModelInput = {
   cruiseSpeed: number | null;
 };
 
-export type EngineInput = {
+export type EngineStageInput = {
   code: string;
   manufacturer: string | null;
   model: string | null;
@@ -38,11 +42,10 @@ export type EngineInput = {
   thrust: number | null;
 };
 
-export type AircraftInput = {
+export type AircraftStageInput = {
   tailNumber: string;
   serialNumber: string | null;
-  modelId: number | null;
-  engineId: number | null;
+  modelCode: string | null;
   engineCode: string | null;
   yearManufactured: number | null;
   registrantType: string | null;
@@ -63,7 +66,7 @@ export type AircraftInput = {
   datasetIngestionId: number;
 };
 
-export type OwnerInput = {
+export type OwnerStageInput = {
   externalKey: string;
   name: string;
   addressLine1: string | null;
@@ -76,9 +79,9 @@ export type OwnerInput = {
   county: string | null;
 };
 
-export type AircraftOwnerLinkInput = {
-  aircraftId: number;
-  ownerId: number;
+export type AircraftOwnerStageInput = {
+  tailNumber: string;
+  ownerExternalKey: string;
   ownershipType: string | null;
   lastActionDate: Date | null;
 };
@@ -87,12 +90,18 @@ export interface ReleasableAircraftRepository {
   startIngestion(metadata: IngestionMetadataInput): Promise<{ id: number }>;
   completeIngestion(id: number, stats: IngestionStats): Promise<void>;
   failIngestion(id: number, error: unknown): Promise<void>;
-  upsertManufacturer(name: string): Promise<{ id: number; name: string }>;
-  upsertAircraftModel(input: AircraftModelInput): Promise<{ id: number; code: string }>;
-  upsertEngine(input: EngineInput): Promise<{ id: number; code: string }>;
-  upsertAircraft(input: AircraftInput): Promise<{ id: number; tailNumber: string }>;
-  upsertOwner(input: OwnerInput): Promise<{ id: number }>;
-  upsertAircraftOwner(link: AircraftOwnerLinkInput): Promise<void>;
-  findAircraftModelIdByCode?(code: string): Promise<number | null>;
-  findEngineIdByCode?(code: string): Promise<number | null>;
+  prepareIngestion(ingestionId: number): Promise<void>;
+  stageManufacturers(ingestionId: number, rows: ManufacturerStageInput[]): Promise<void>;
+  mergeManufacturers(ingestionId: number): Promise<void>;
+  stageAircraftModels(ingestionId: number, rows: AircraftModelStageInput[]): Promise<void>;
+  mergeAircraftModels(ingestionId: number): Promise<void>;
+  stageEngines(ingestionId: number, rows: EngineStageInput[]): Promise<void>;
+  mergeEngines(ingestionId: number): Promise<void>;
+  stageAircraft(ingestionId: number, rows: AircraftStageInput[]): Promise<void>;
+  mergeAircraft(ingestionId: number): Promise<void>;
+  stageOwners(ingestionId: number, rows: OwnerStageInput[]): Promise<void>;
+  mergeOwners(ingestionId: number): Promise<void>;
+  stageAircraftOwners(ingestionId: number, rows: AircraftOwnerStageInput[]): Promise<void>;
+  mergeAircraftOwners(ingestionId: number): Promise<void>;
+  cleanupIngestion(ingestionId: number): Promise<void>;
 }

@@ -17,8 +17,6 @@ import type {
   ReleasableAircraftRepository,
 } from '../ingest/types';
 
-const DEFAULT_TRANSACTION_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
-
 export type RefreshTrigger = 'manual' | 'scheduled';
 
 const TRIGGER_DATASET_MAP: Record<RefreshTrigger, 'MANUAL' | 'SCHEDULED'> = {
@@ -87,7 +85,6 @@ type FAARefreshServiceOptions = {
   prisma: PrismaClient;
   config: AppConfig;
   logger?: Logger;
-  transactionTimeoutMs?: number;
   downloadDataset?: DownloadDataset;
   ingestArchive?: IngestArchiveFn;
   repositoryFactory?: RepositoryFactory;
@@ -132,7 +129,6 @@ export class FAARefreshService {
   private readonly downloadDataset: DownloadDataset;
   private readonly ingestArchive: IngestArchiveFn;
   private readonly repositoryFactory: RepositoryFactory;
-  private readonly transactionTimeoutMs: number;
   private readonly metrics?: MetricsHooks;
 
   private currentRefresh: Promise<RefreshResult> | null = null;
@@ -144,7 +140,6 @@ export class FAARefreshService {
     this.downloadDataset = options.downloadDataset ?? defaultDownloadDataset;
     this.ingestArchive = options.ingestArchive ?? defaultIngestArchive;
     this.repositoryFactory = options.repositoryFactory ?? defaultRepositoryFactory;
-    this.transactionTimeoutMs = options.transactionTimeoutMs ?? DEFAULT_TRANSACTION_TIMEOUT_MS;
     this.metrics = options.metrics;
   }
 
@@ -213,12 +208,12 @@ export class FAARefreshService {
     );
 
     let ingestionId: number | null = null;
+    const repository = this.repositoryFactory(this.prisma);
 
     try {
       const { dataVersion } = await this.downloadDataset(sourceUrl, archivePath);
       const downloadedAt = new Date();
 
-      const repository = this.repositoryFactory(this.prisma);
       const ingestion = await repository.startIngestion({
         sourceUrl,
         dataVersion,
@@ -228,19 +223,11 @@ export class FAARefreshService {
       });
 
       ingestionId = ingestion.id;
-      const currentIngestionId = ingestion.id;
-
-      const stats = await this.prisma.$transaction(
-        async (transaction) =>
-          this.ingestArchive({
-            archivePath,
-            repository: this.repositoryFactory(transaction),
-            ingestionId: currentIngestionId,
-          }),
-        {
-          timeout: this.transactionTimeoutMs,
-        },
-      );
+      const stats = await this.ingestArchive({
+        archivePath,
+        repository,
+        ingestionId: ingestion.id,
+      });
 
       await repository.completeIngestion(ingestionId, stats);
 
@@ -270,7 +257,6 @@ export class FAARefreshService {
 
       if (ingestionId !== null) {
         try {
-          const repository = this.repositoryFactory(this.prisma);
           await repository.failIngestion(ingestionId, error);
         } catch (markFailureError) {
           this.logger.error(
