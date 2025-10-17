@@ -8,19 +8,31 @@ import type {
   OwnerInput,
   ReleasableAircraftRepository,
 } from './types';
-import { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 export class PrismaReleasableAircraftRepository
   implements ReleasableAircraftRepository
 {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClient | Prisma.TransactionClient) {}
 
   async startIngestion(metadata: IngestionMetadataInput) {
+    const trigger =
+      metadata.trigger === 'SCHEDULED' || metadata.trigger === 'MANUAL'
+        ? metadata.trigger
+        : 'MANUAL';
+    const startedAt = metadata.startedAt ?? new Date();
+
     return this.prisma.datasetIngestion.create({
       data: {
         sourceUrl: metadata.sourceUrl,
         downloadedAt: metadata.downloadedAt,
         dataVersion: metadata.dataVersion ?? null,
+        status: 'RUNNING',
+        trigger,
+        startedAt,
+      },
+      select: {
+        id: true,
       },
     });
   }
@@ -29,13 +41,35 @@ export class PrismaReleasableAircraftRepository
     await this.prisma.datasetIngestion.update({
       where: { id },
       data: {
-        processedAt: new Date(),
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        failedAt: null,
+        errorMessage: null,
         totalManufacturers: stats.manufacturers,
         totalModels: stats.aircraftModels,
         totalEngines: stats.engines,
         totalAircraft: stats.aircraft,
         totalOwners: stats.owners,
         totalOwnerLinks: stats.ownerLinks,
+      },
+    });
+  }
+
+  async failIngestion(id: number, error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : 'Unknown error';
+
+    await this.prisma.datasetIngestion.update({
+      where: { id },
+      data: {
+        status: 'FAILED',
+        failedAt: new Date(),
+        completedAt: null,
+        errorMessage: message.slice(0, 1000),
       },
     });
   }

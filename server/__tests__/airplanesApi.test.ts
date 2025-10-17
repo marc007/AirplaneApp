@@ -14,6 +14,9 @@ type PrismaClientMock = {
     count: jest.Mock;
     findMany: jest.Mock;
   };
+  datasetIngestion: {
+    findFirst: jest.Mock;
+  };
   $transaction: jest.Mock;
 };
 
@@ -33,6 +36,9 @@ describe('GET /api/airplanes', () => {
       aircraft: {
         count: jest.fn(),
         findMany: jest.fn(),
+      },
+      datasetIngestion: {
+        findFirst: jest.fn(),
       },
       $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
     };
@@ -307,5 +313,76 @@ describe('GET /api/airplanes', () => {
     expect(response.body.message).toBe('Validation failed');
     expect(response.body.details).toBeDefined();
     expect(getPrismaClientMock).not.toHaveBeenCalled();
+  });
+
+  describe('GET /api/airplanes/refresh-status', () => {
+    it('returns the latest refresh metadata', async () => {
+      const ingestionRecord = {
+        id: 42,
+        status: 'COMPLETED',
+        trigger: 'SCHEDULED',
+        downloadedAt: new Date('2024-01-01T00:00:00Z'),
+        startedAt: new Date('2024-01-01T00:05:00Z'),
+        completedAt: new Date('2024-01-01T00:10:00Z'),
+        failedAt: null,
+        dataVersion: 'abc123',
+        totalManufacturers: 10,
+        totalModels: 20,
+        totalEngines: 30,
+        totalAircraft: 40,
+        totalOwners: 50,
+        totalOwnerLinks: 60,
+        errorMessage: null,
+      };
+
+      prismaMock.datasetIngestion.findFirst.mockResolvedValueOnce(ingestionRecord);
+
+      const response = await request(createApp()).get('/api/airplanes/refresh-status');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        id: 42,
+        status: 'COMPLETED',
+        trigger: 'SCHEDULED',
+        downloadedAt: '2024-01-01T00:00:00.000Z',
+        startedAt: '2024-01-01T00:05:00.000Z',
+        completedAt: '2024-01-01T00:10:00.000Z',
+        failedAt: null,
+        dataVersion: 'abc123',
+        totals: {
+          manufacturers: 10,
+          models: 20,
+          engines: 30,
+          aircraft: 40,
+          owners: 50,
+          ownerLinks: 60,
+        },
+        errorMessage: null,
+      });
+      expect(prismaMock.datasetIngestion.findFirst).toHaveBeenCalledWith({
+        orderBy: {
+          startedAt: 'desc',
+        },
+      });
+    });
+
+    it('returns default metadata when no refresh has run', async () => {
+      prismaMock.datasetIngestion.findFirst.mockResolvedValueOnce(null);
+
+      const response = await request(createApp()).get('/api/airplanes/refresh-status');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'NOT_AVAILABLE',
+        trigger: null,
+        downloadedAt: null,
+        startedAt: null,
+        completedAt: null,
+        failedAt: null,
+        dataVersion: null,
+        totals: null,
+        errorMessage: null,
+      });
+    });
   });
 });

@@ -97,3 +97,47 @@ Content-Type: application/json
 
 Errors are returned using a consistent payload shape: `{ "message": "...", "details": { ... } }`
 if details are available.
+
+## Refresh status endpoint
+
+```
+GET /api/airplanes/refresh-status
+```
+
+Returns metadata about the most recent dataset refresh so administrative screens can display
+up-to-date status information. When no refresh has been recorded the endpoint returns a payload of
+`null` values with `status` set to `NOT_AVAILABLE`.
+
+### Successful response
+
+```
+Status: 200 OK
+Content-Type: application/json
+```
+
+```json
+{
+  "id": 42,
+  "status": "COMPLETED",
+  "trigger": "SCHEDULED",
+  "downloadedAt": "2024-01-01T00:00:00.000Z",
+  "startedAt": "2024-01-01T00:05:00.000Z",
+  "completedAt": "2024-01-01T00:10:00.000Z",
+  "failedAt": null,
+  "dataVersion": "E1234567",
+  "totals": {
+    "manufacturers": 1200,
+    "models": 3400,
+    "engines": 3200,
+    "aircraft": 987654,
+    "owners": 876543,
+    "ownerLinks": 900000
+  },
+  "errorMessage": null
+}
+```
+
+- `status` reflects the current ingestion state and will be one of `PENDING`, `RUNNING`, `COMPLETED`,
+  or `FAILED`.
+- `trigger` indicates whether the ingestion was kicked off manually or by the background scheduler.
+- When an ingestion fails, `failedAt` is set and `errorMessage` contains a truncated error summary.

@@ -121,6 +121,57 @@ const ensureFiltersProvided = (query: SearchQuery, tailNumber?: string) => {
 };
 
 router.get(
+  '/refresh-status',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const prisma = getPrismaClient();
+      const latest = await prisma.datasetIngestion.findFirst({
+        orderBy: {
+          startedAt: 'desc',
+        },
+      });
+
+      if (!latest) {
+        res.json({
+          status: 'NOT_AVAILABLE',
+          trigger: null,
+          downloadedAt: null,
+          startedAt: null,
+          completedAt: null,
+          failedAt: null,
+          dataVersion: null,
+          totals: null,
+          errorMessage: null,
+        });
+        return;
+      }
+
+      res.json({
+        id: latest.id,
+        status: latest.status,
+        trigger: latest.trigger,
+        downloadedAt: latest.downloadedAt.toISOString(),
+        startedAt: latest.startedAt.toISOString(),
+        completedAt: latest.completedAt ? latest.completedAt.toISOString() : null,
+        failedAt: latest.failedAt ? latest.failedAt.toISOString() : null,
+        dataVersion: latest.dataVersion ?? null,
+        totals: {
+          manufacturers: latest.totalManufacturers ?? null,
+          models: latest.totalModels ?? null,
+          engines: latest.totalEngines ?? null,
+          aircraft: latest.totalAircraft ?? null,
+          owners: latest.totalOwners ?? null,
+          ownerLinks: latest.totalOwnerLinks ?? null,
+        },
+        errorMessage: latest.errorMessage ?? null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.get(
   '/',
   validateRequest(searchRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {

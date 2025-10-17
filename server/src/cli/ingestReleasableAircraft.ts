@@ -1,63 +1,23 @@
-import { createWriteStream } from 'fs';
-import { mkdtemp, rm } from 'fs/promises';
-import path from 'path';
-import { pipeline } from 'stream/promises';
-import { Readable } from 'stream';
-import type { ReadableStream } from 'stream/web';
-import { tmpdir } from 'os';
-import { fetch } from 'undici';
-
 import { getConfig } from '../config';
-import { ingestReleasableAircraftArchive } from '../ingest/releasableAircraft';
-import { PrismaReleasableAircraftRepository } from '../ingest/prismaRepository';
 import { getPrismaClient } from '../lib/prisma';
-
-const downloadDataset = async (url: string, archivePath: string) => {
-  const response = await fetch(url);
-
-  if (!response.ok || !response.body) {
-    throw new Error(`Failed to download dataset from ${url}: ${response.status}`);
-  }
-
-  const readable = Readable.fromWeb(response.body as unknown as ReadableStream<Uint8Array>);
-  const writable = createWriteStream(archivePath);
-
-  await pipeline(readable, writable);
-
-  const dataVersion =
-    response.headers.get('last-modified') ?? response.headers.get('etag') ?? undefined;
-
-  return { dataVersion };
-};
+import { FAARefreshService } from '../services/faaRefreshService';
 
 const main = async () => {
   const config = getConfig();
   const prisma = getPrismaClient();
-  const repository = new PrismaReleasableAircraftRepository(prisma);
-
-  const tempDir = await mkdtemp(path.join(tmpdir(), 'faa-'));
-  const archivePath = path.join(tempDir, 'ReleasableAircraft.zip');
+  const service = new FAARefreshService({
+    prisma,
+    config,
+  });
 
   try {
-    const downloadedAt = new Date();
-    const { dataVersion } = await downloadDataset(config.faaDatasetUrl, archivePath);
-
-    const ingestion = await repository.startIngestion({
-      sourceUrl: config.faaDatasetUrl,
-      dataVersion,
-      downloadedAt,
-    });
-
-    const stats = await ingestReleasableAircraftArchive({
-      archivePath,
-      repository,
-      ingestionId: ingestion.id,
-    });
-
-    await repository.completeIngestion(ingestion.id, stats);
+    const result = await service.refresh('manual');
+    // eslint-disable-next-line no-console
+    console.log(
+      `FAA dataset refresh completed: ingestion=${result.ingestionId}, duration=${result.durationMs}ms, dataVersion=${result.dataVersion ?? 'unknown'}`,
+    );
   } finally {
     await prisma.$disconnect();
-    await rm(tempDir, { recursive: true, force: true });
   }
 };
 
