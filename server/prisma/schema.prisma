@@ -7,6 +7,137 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Manufacturer {
+  id        Int             @id @default(autoincrement())
+  name      String          @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  models    AircraftModel[]
+}
+
+model AircraftModel {
+  id                 Int             @id @default(autoincrement())
+  code               String          @unique
+  manufacturerId     Int
+  manufacturer       Manufacturer    @relation(fields: [manufacturerId], references: [id])
+  modelName          String
+  typeAircraft       String?
+  typeEngine         String?
+  category           String?
+  buildCertification String?
+  numberOfEngines    Int?
+  numberOfSeats      Int?
+  weightClass        String?
+  cruiseSpeed        Int?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  aircraft           Aircraft[]
+
+  @@index([manufacturerId])
+}
+
+model Engine {
+  id           Int        @id @default(autoincrement())
+  code         String     @unique
+  manufacturer String?
+  model        String?
+  type         String?
+  horsepower   Int?
+  thrust       Int?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  aircraft     Aircraft[]
+
+  @@index([manufacturer])
+}
+
+model Owner {
+  id           Int             @id @default(autoincrement())
+  externalKey  String          @unique
+  name         String
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String?
+  region       String?
+  county       String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  aircraft     AircraftOwner[]
+}
+
+model AircraftOwner {
+  aircraftId     Int
+  ownerId        Int
+  ownershipType  String?
+  lastActionDate DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  aircraft Aircraft @relation(fields: [aircraftId], references: [id])
+  owner    Owner    @relation(fields: [ownerId], references: [id])
+
+  @@id([aircraftId, ownerId])
+}
+
+model DatasetIngestion {
+  id                 Int        @id @default(autoincrement())
+  sourceUrl          String
+  downloadedAt       DateTime
+  dataVersion        String?
+  processedAt        DateTime?
+  totalManufacturers Int?
+  totalModels        Int?
+  totalEngines       Int?
+  totalAircraft      Int?
+  totalOwners        Int?
+  totalOwnerLinks    Int?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  aircraft           Aircraft[]
+}
+
+model Aircraft {
+  id                     Int               @id @default(autoincrement())
+  tailNumber             String            @unique @db.VarChar(10)
+  serialNumber           String?
+  modelId                Int?
+  model                  AircraftModel?    @relation(fields: [modelId], references: [id])
+  engineId               Int?
+  engine                 Engine?           @relation(fields: [engineId], references: [id])
+  engineCode             String?
+  yearManufactured       Int?
+  registrantType         String?
+  certification          String?
+  aircraftType           String?
+  engineType             String?
+  statusCode             String?
+  modeSCode              String?
+  modeSCodeHex           String?
+  fractionalOwnership    Boolean?
+  airworthinessClass     String?
+  expirationDate         DateTime?
+  lastActivityDate       DateTime?
+  certificationIssueDate DateTime?
+  kitManufacturer        String?
+  kitModel               String?
+  statusCodeChangeDate   DateTime?
+  datasetIngestionId     Int?
+  datasetIngestion       DatasetIngestion? @relation(fields: [datasetIngestionId], references: [id])
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  owners                 AircraftOwner[]
+
+  @@index([modelId])
+  @@index([engineId])
+  @@index([statusCode])
+  @@index([modeSCode])
+  @@index([modeSCodeHex])
+  @@index([registrantType])
+}
+
 model AircraftSearchLog {
   id          Int      @id @default(autoincrement())
   tailNumber  String   @db.VarChar(10)
