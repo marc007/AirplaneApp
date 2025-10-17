@@ -94,9 +94,17 @@ describe('FAARefreshService', () => {
         port: 3000,
         faaDatasetUrl: 'https://example.com/archive.zip',
         databaseUrl: 'postgres://example',
+        database: {
+          url: 'postgres://example',
+          sslMode: 'prefer',
+          connectionLimit: null,
+        },
         scheduler: {
           enabled: false,
           intervalMinutes: 60,
+        },
+        telemetry: {
+          appInsights: null,
         },
       },
       logger: {

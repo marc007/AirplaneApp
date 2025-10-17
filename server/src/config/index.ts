@@ -16,3 +16,5 @@ export const getConfig = (): AppConfig => {
 export const resetConfig = () => {
   cachedConfig = null;
 };
+
+export type { AppConfig, DatabaseSslMode } from './schema';

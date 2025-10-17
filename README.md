@@ -124,8 +124,13 @@ npm run ingest:faa
 | `PORT` | No | HTTP port to bind. | `3000` |
 | `FAA_DATASET_URL` | **Yes** | HTTPS URL to the FAA releasable aircraft archive (`ReleasableAircraft.zip`). | `https://example.com/faa/ReleasableAircraft.zip` |
 | `DATABASE_URL` | **Yes** | Postgres connection string consumed by Prisma. | `postgresql://postgres:postgres@localhost:5432/airplanecheck` |
+| `DATABASE_SSL_MODE` | No | Forces Prisma to append `sslmode` to the connection string when absent. | `require` |
+| `DATABASE_CONNECTION_LIMIT` | No | Caps concurrent Postgres connections opened by Prisma. | `10` |
 | `SCHEDULER_ENABLED` | No | When `true`, enables the built-in refresh scheduler. | `false` |
 | `SCHEDULER_INTERVAL_MINUTES` | No | Minutes between scheduled refresh attempts. Values < 1 are coerced to 1. | `60` |
+| `APPINSIGHTS_CONNECTION_STRING` | No | Enables Application Insights telemetry and request logging when set. | *(unset)* |
+| `APPINSIGHTS_ROLE_NAME` | No | Overrides the cloud role label reported to Application Insights. | `airplanecheck-api` |
+| `APPINSIGHTS_SAMPLING_PERCENTAGE` | No | Sampling percentage (0–100) applied to Application Insights telemetry. | `50` |
 
 ### Frontend variables
 
@@ -165,6 +170,7 @@ Key request/response examples, schema details, and error codes are documented in
 - **Hosting options:** Any platform capable of running Node 20 containers and exposing Postgres connectivity is suitable (Kubernetes, ECS/Fargate, Fly.io, Render, Railway, etc.). Provision a managed Postgres instance with automated backups and tune connection pooling to match your platform.
 - **Scheduling refresh jobs:** Either enable the built-in scheduler (`SCHEDULER_ENABLED=true`) with an appropriate `SCHEDULER_INTERVAL_MINUTES`, or run the ingestion CLI from Cron/Cloud Scheduler. External schedulers should monitor for the `RefreshInProgressError` response to avoid overlapping jobs.
 - **Monitoring ingestion:** Track the `datasetIngestion` table for authoritative job history, including failure messages. Expose logs from the backend container to your logging stack to capture ingestion diagnostics. The `/api/airplanes/refresh-status` endpoint can serve as a lightweight health signal for dashboards and can be polled by the frontend to surface “last refreshed” messaging.
+- **Azure App Service:** Use [`server/docs/azure-app-service-deployment.md`](server/docs/azure-app-service-deployment.md) for platform-specific configuration, GitHub Actions secrets, and scaling recommendations when hosting on Azure.
 
 ## Legacy Parse migration status
 
