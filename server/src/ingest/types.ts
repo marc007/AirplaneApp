@@ -2,6 +2,8 @@ export type IngestionMetadataInput = {
   sourceUrl: string;
   dataVersion?: string | null;
   downloadedAt: Date;
+  trigger?: 'MANUAL' | 'SCHEDULED';
+  startedAt?: Date;
 };
 
 export type IngestionStats = {
@@ -84,6 +86,7 @@ export type AircraftOwnerLinkInput = {
 export interface ReleasableAircraftRepository {
   startIngestion(metadata: IngestionMetadataInput): Promise<{ id: number }>;
   completeIngestion(id: number, stats: IngestionStats): Promise<void>;
+  failIngestion(id: number, error: unknown): Promise<void>;
   upsertManufacturer(name: string): Promise<{ id: number; name: string }>;
   upsertAircraftModel(input: AircraftModelInput): Promise<{ id: number; code: string }>;
   upsertEngine(input: EngineInput): Promise<{ id: number; code: string }>;

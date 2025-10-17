@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum DatasetIngestionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum DatasetIngestionTrigger {
+  MANUAL
+  SCHEDULED
+}
+
 model Manufacturer {
   id        Int             @id @default(autoincrement())
   name      String          @unique
@@ -87,7 +99,12 @@ model DatasetIngestion {
   sourceUrl          String
   downloadedAt       DateTime
   dataVersion        String?
-  processedAt        DateTime?
+  status             DatasetIngestionStatus @default(PENDING)
+  trigger            DatasetIngestionTrigger @default(MANUAL)
+  startedAt          DateTime   @default(now())
+  completedAt        DateTime?
+  failedAt           DateTime?
+  errorMessage       String?
   totalManufacturers Int?
   totalModels        Int?
   totalEngines       Int?

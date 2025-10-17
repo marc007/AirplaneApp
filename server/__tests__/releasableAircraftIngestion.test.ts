@@ -31,11 +31,30 @@ class InMemoryReleasableAircraftRepository
   ownersByExternalKey = new Map<string, { id: number; data: OwnerInput }>();
   ownersById = new Map<number, { id: number; data: OwnerInput }>();
   aircraftOwnerLinks = new Map<string, AircraftOwnerLinkInput>();
-  ingestions = new Map<number, { metadata: IngestionMetadataInput; stats?: IngestionStats }>();
+  ingestions = new Map<
+    number,
+    {
+      metadata: IngestionMetadataInput;
+      stats?: IngestionStats;
+      status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+      completedAt?: Date;
+      failedAt?: Date;
+      errorMessage?: string;
+    }
+  >();
 
   async startIngestion(metadata: IngestionMetadataInput) {
     const id = this.ingestionSequence++;
-    this.ingestions.set(id, { metadata });
+    const startedAt = metadata.startedAt ?? new Date();
+    const trigger = metadata.trigger ?? 'MANUAL';
+    this.ingestions.set(id, {
+      metadata: {
+        ...metadata,
+        startedAt,
+        trigger,
+      },
+      status: 'RUNNING',
+    });
     return { id };
   }
 
@@ -43,6 +62,25 @@ class InMemoryReleasableAircraftRepository
     const existing = this.ingestions.get(id);
     if (existing) {
       existing.stats = stats;
+      existing.status = 'COMPLETED';
+      existing.completedAt = new Date();
+      existing.failedAt = undefined;
+      existing.errorMessage = undefined;
+    }
+  }
+
+  async failIngestion(id: number, error: unknown) {
+    const existing = this.ingestions.get(id);
+    if (existing) {
+      existing.status = 'FAILED';
+      existing.failedAt = new Date();
+      existing.completedAt = undefined;
+      existing.errorMessage =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error';
     }
   }
 
