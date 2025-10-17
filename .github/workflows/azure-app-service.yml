@@ -1,0 +1,55 @@
+name: Deploy API to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20.x'
+  SERVER_WORKING_DIR: server
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ env.SERVER_WORKING_DIR }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Apply Prisma migrations
+        env:
+          DATABASE_URL: ${{ secrets.AZURE_POSTGRES_CONNECTION_STRING }}
+        run: npm run prisma:deploy
+
+      - name: Prune dev dependencies
+        run: npm prune --production
+
+      - name: Create deployment package
+        run: zip -r ../airplanecheck-backend.zip . -x "**/.git*" "**/__tests__/*" "**/coverage/*" "**/*.log"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./airplanecheck-backend.zip
