@@ -125,6 +125,23 @@ const AirplaneSearchApp = ({ dataService: providedDataService }) => {
               <dt>Status</dt>
               <dd>{selectedPlane.status}</dd>
             </div>
+            {selectedPlane.expirationDate && (
+              <div>
+                <dt>Registration expires</dt>
+                <dd>{selectedPlane.expirationDate}</dd>
+              </div>
+            )}
+            {Array.isArray(selectedPlane.owners) && selectedPlane.owners.length > 0 && (
+              <div>
+                <dt>Primary owner</dt>
+                <dd>
+                  {selectedPlane.owners[0].name || 'Unknown'}
+                  {selectedPlane.owners[0].location
+                    ? ` (${selectedPlane.owners[0].location})`
+                    : ''}
+                </dd>
+              </div>
+            )}
           </dl>
         </section>
       )}

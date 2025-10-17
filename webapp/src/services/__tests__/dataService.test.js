@@ -16,27 +16,66 @@ describe('DataService', () => {
 
   it('normalises search queries, caches results, and returns cloned data', async () => {
     const plane = {
-      objectId: 'abc123',
-      nnumber: 'N12345',
+      id: 'abc123',
+      tailNumber: 'N12345',
       manufacturer: 'Cessna',
       model: '172',
-      status: 'Active'
+      statusCode: 'ACTIVE',
+      expirationDate: '2024-12-31T00:00:00.000Z',
+      owners: [
+        {
+          name: 'Jane Doe',
+          city: 'Seattle',
+          state: 'WA',
+          country: 'US',
+          ownershipType: 'Individual',
+          lastActionDate: '2022-06-01T00:00:00.000Z'
+        }
+      ]
     };
-    fetchAirplanes.mockResolvedValueOnce([plane]);
+    fetchAirplanes.mockResolvedValueOnce({
+      data: [plane],
+      meta: {
+        total: 1,
+        page: 1,
+        pageSize: 1,
+        totalPages: 1
+      },
+      filters: {
+        tailNumber: {
+          value: 'N12345',
+          exact: true
+        }
+      }
+    });
 
     const results = await service.search('12345');
 
     expect(fetchAirplanes).toHaveBeenCalledWith('N12345');
-    expect(results).toEqual([
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      id: 'abc123',
+      nnumber: 'N12345',
+      manufacturer: 'Cessna',
+      model: '172',
+      status: 'ACTIVE',
+      expirationDate: '2024-12-31T00:00:00.000Z'
+    });
+    expect(results[0].owners).toEqual([
       {
-        objectId: 'abc123',
-        id: 'abc123',
-        nnumber: 'N12345',
-        manufacturer: 'Cessna',
-        model: '172',
-        status: 'Active'
+        name: 'Jane Doe',
+        location: 'Seattle, WA, US',
+        ownershipType: 'Individual',
+        lastActionDate: '2022-06-01T00:00:00.000Z'
       }
     ]);
+    expect(service.lastMeta).toMatchObject({ total: 1, page: 1 });
+    expect(service.lastFilters).toMatchObject({
+      tailNumber: {
+        value: 'N12345',
+        exact: true
+      }
+    });
     expect(results[0]).not.toBe(service.getAirplaneInfos()[0]);
 
     const serialised = storage.getItem(AIRPLANE_CACHE_KEY);

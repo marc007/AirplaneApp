@@ -26,22 +26,45 @@ describe('AirplaneSearchApp', () => {
   });
 
   it('performs a search, renders results, and displays detail content', async () => {
-    fetchAirplanes.mockResolvedValueOnce([
-      {
-        id: 1,
-        nnumber: 'N12345',
-        manufacturer: 'Cessna',
-        model: '172',
-        status: 'Active'
+    fetchAirplanes.mockResolvedValueOnce({
+      data: [
+        {
+          id: 1,
+          tailNumber: 'N12345',
+          manufacturer: 'Cessna',
+          model: '172',
+          statusCode: 'ACTIVE',
+          expirationDate: '2024-12-31',
+          owners: [
+            {
+              name: 'Jane Doe',
+              city: 'Seattle',
+              state: 'WA',
+              country: 'US'
+            }
+          ]
+        },
+        {
+          id: 2,
+          tailNumber: 'N67890',
+          manufacturer: 'Piper',
+          model: 'PA-28',
+          statusCode: 'INACTIVE'
+        }
+      ],
+      meta: {
+        total: 2,
+        page: 1,
+        pageSize: 2,
+        totalPages: 1
       },
-      {
-        id: 2,
-        nnumber: 'N67890',
-        manufacturer: 'Piper',
-        model: 'PA-28',
-        status: 'Inactive'
+      filters: {
+        tailNumber: {
+          value: 'N12345',
+          exact: true
+        }
       }
-    ]);
+    });
 
     const { user } = buildApp();
 
@@ -56,6 +79,8 @@ describe('AirplaneSearchApp', () => {
 
     const detail = await screen.findByRole('region', { name: /airplane detail/i });
     expect(within(detail).getByText(/Cessna/)).toBeInTheDocument();
+    expect(within(detail).getByText(/Primary owner/i)).toBeInTheDocument();
+    expect(within(detail).getByText(/Jane Doe/)).toBeInTheDocument();
     expect(fetchAirplanes).toHaveBeenCalledWith('N12345');
   });
 
@@ -63,15 +88,19 @@ describe('AirplaneSearchApp', () => {
     const storage = createMemoryStorage();
     const { user } = buildApp({ storage });
 
-    fetchAirplanes.mockResolvedValueOnce([
-      {
-        id: 1,
-        nnumber: 'N13579',
-        manufacturer: 'Diamond',
-        model: 'DA40',
-        status: 'Active'
-      }
-    ]);
+    fetchAirplanes.mockResolvedValueOnce({
+      data: [
+        {
+          id: 1,
+          tailNumber: 'N13579',
+          manufacturer: 'Diamond',
+          model: 'DA40',
+          statusCode: 'ACTIVE'
+        }
+      ],
+      meta: null,
+      filters: null
+    });
 
     await user.type(screen.getByLabelText(/tail number/i), '13579');
     await user.click(screen.getByTestId('search-button'));
