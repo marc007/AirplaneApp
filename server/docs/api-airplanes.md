@@ -1,13 +1,21 @@
 # Aircraft Search API
 
-The aircraft search endpoint exposes FAA registration data that has been normalized into the
-service database. It powers the web experience by returning lightweight summaries that can be
-rendered directly in search results.
+The Airplane Check backend exposes a REST API that normalises FAA registration data into a
+Postgres database. It powers the modern web experience and replaces the legacy Parse-based
+integrations. All endpoints return JSON and do not require authentication in development.
 
-## Endpoint
+Base URL: `https://<host>/api`
 
-```
-GET /api/airplanes
+## `GET /api/airplanes`
+
+Search the dataset for aircraft using tail number, status, manufacturer, and owner filters. At least
+one filter must be provided.
+
+### Example request
+
+```bash
+curl "http://localhost:3000/api/airplanes?tailNumber=N12345&exact=true&page=1&pageSize=25" \
+  --header "Accept: application/json"
 ```
 
 ### Query parameters
@@ -22,10 +30,50 @@ GET /api/airplanes
 | `page` | `number` | optional | Results page to return. Defaults to `1`. Must be between `1` and `1000`. |
 | `pageSize` | `number` | optional | Number of records per page. Defaults to `25` and cannot exceed `100`. |
 
-At least one of `tailNumber`, `status`, `manufacturer`, or `owner` must be supplied. Requests that
-omit all filters will be rejected with a `400` response.
+Requests that omit all filters are rejected with a `400` response.
 
-### Successful response
+### Response fields
+
+The endpoint returns an object with the following shape.
+
+#### `data[]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `tailNumber` | `string` | Normalised N-number (always capitalised and prefixed with `N`). |
+| `serialNumber` | `string` or `null` | Manufacturer serial number when available. |
+| `statusCode` | `string` or `null` | FAA registration status code. |
+| `registrantType` | `string` or `null` | Registrant classification reported by the FAA. |
+| `manufacturer` | `string` or `null` | Aircraft manufacturer. |
+| `model` | `string` or `null` | Aircraft model description. |
+| `modelCode` | `string` or `null` | FAA model code. |
+| `engineManufacturer` | `string` or `null` | Engine manufacturer. |
+| `engineModel` | `string` or `null` | Engine model. |
+| `airworthinessClass` | `string` or `null` | Airworthiness classification string. |
+| `certificationIssueDate` | `string` or `null` | ISO 8601 timestamp. |
+| `expirationDate` | `string` or `null` | ISO 8601 timestamp for registration expiry. |
+| `lastActivityDate` | `string` or `null` | ISO 8601 timestamp for the last FAA action. |
+| `fractionalOwnership` | `boolean` or `null` | Indicates whether the aircraft participates in fractional ownership. |
+| `owners[]` | `object[]` | Owner records sorted alphabetically by owner name. |
+
+Owner objects include `name`, `city`, `state`, `country`, `ownershipType`, and `lastActionDate`
+(ISO 8601 string). When no owners are linked, the array is empty.
+
+#### `meta`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `page` | `number` | Requested page number. |
+| `pageSize` | `number` | Number of records per page. |
+| `total` | `number` | Total number of matching records. |
+| `totalPages` | `number` | `0` when `total` is `0`, otherwise `ceil(total / pageSize)`. |
+
+#### `filters`
+
+Echoes the normalised filters applied to the query so consumers can synchronise UI state easily.
+Tail number filters include both the normalised value and whether the query was an exact match.
+
+### Sample response
 
 ```
 Status: 200 OK
@@ -80,13 +128,6 @@ Content-Type: application/json
 }
 ```
 
-- `data` contains the paginated aircraft summaries. Dates are ISO-8601 strings.
-- `owners` is ordered alphabetically by owner name. When no owners are linked, an empty array is
-  returned.
-- `meta.totalPages` is `0` when no results match.
-- `filters` echoes the normalised filters applied to the query so consumers can synchronise UI
-  state easily.
-
 ### Error responses
 
 | Status | Message | When it occurs |
@@ -95,20 +136,46 @@ Content-Type: application/json
 | `400` | `At least one search filter is required` | No recognised filters were supplied. |
 | `500` | `Internal Server Error` | An unexpected server fault occurred. |
 
-Errors are returned using a consistent payload shape: `{ "message": "...", "details": { ... } }`
-if details are available.
+Errors are returned using a consistent payload shape:
 
-## Refresh status endpoint
+```json
+{
+  "message": "...",
+  "details": {
+    "field": ["error"]
+  }
+}
+```
 
-```
-GET /api/airplanes/refresh-status
-```
+## `GET /api/airplanes/refresh-status`
 
 Returns metadata about the most recent dataset refresh so administrative screens can display
 up-to-date status information. When no refresh has been recorded the endpoint returns a payload of
 `null` values with `status` set to `NOT_AVAILABLE`.
 
-### Successful response
+### Example request
+
+```bash
+curl "http://localhost:3000/api/airplanes/refresh-status" \
+  --header "Accept: application/json"
+```
+
+### Response fields
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `id` | `number` or `null` | Primary key of the ingestion record. |
+| `status` | `string` | One of `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`, or `NOT_AVAILABLE`. |
+| `trigger` | `string` or `null` | `MANUAL` when kicked off by the CLI, `SCHEDULED` when triggered by the scheduler, otherwise `null`. |
+| `downloadedAt` | `string` or `null` | ISO 8601 timestamp for when the archive download finished. |
+| `startedAt` | `string` or `null` | ISO 8601 timestamp marking the ingestion start. |
+| `completedAt` | `string` or `null` | ISO 8601 timestamp when the ingestion finished successfully. |
+| `failedAt` | `string` or `null` | ISO 8601 timestamp when a failure was recorded. |
+| `dataVersion` | `string` or `null` | Version identifier captured from the FAA download headers (`Last-Modified` or `ETag`). |
+| `totals` | `object` or `null` | Aggregated row counts (manufacturers, models, engines, aircraft, owners, ownerLinks). |
+| `errorMessage` | `string` or `null` | Truncated error summary when the ingestion fails. |
+
+### Sample response
 
 ```
 Status: 200 OK
@@ -137,7 +204,24 @@ Content-Type: application/json
 }
 ```
 
-- `status` reflects the current ingestion state and will be one of `PENDING`, `RUNNING`, `COMPLETED`,
-  or `FAILED`.
-- `trigger` indicates whether the ingestion was kicked off manually or by the background scheduler.
-- When an ingestion fails, `failedAt` is set and `errorMessage` contains a truncated error summary.
+### Error responses
+
+The endpoint returns `500 Internal Server Error` when the status lookup fails unexpectedly.
+
+## Dataset metadata and caching guidance
+
+- The ingestion pipeline stores every run in the `datasetIngestion` table. `downloadedAt`,
+  `startedAt`, and `completedAt` track the lifecycle of that run. Use these timestamps to surface
+  "Last refreshed" messaging in the UI.
+- `dataVersion` is populated from the FAA archive headers whenever possible. Treat this as the
+  canonical dataset identifier. If it is `null`, fall back to `completedAt` (or `startedAt`) when
+  determining whether a cache is stale.
+- The frontend should poll `GET /api/airplanes/refresh-status` before issuing search requests and
+  cache the response for a short period (two minutes in the current web client). Persist search
+  results alongside the dataset version and flush the cache whenever the reported version changes.
+- The ingestion CLI (`npm run ingest:faa`) and the built-in scheduler both raise a
+  `RefreshInProgressError` if a run is already active. External job runners should catch this
+  condition and retry later instead of forcing concurrent ingestions.
+- Monitoring systems can rely on `status`, `failedAt`, and `errorMessage` to detect ingestion
+  failures quickly. The totals object is useful for verifying that expected row counts were
+  processed.

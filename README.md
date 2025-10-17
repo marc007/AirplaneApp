@@ -1,83 +1,173 @@
+# Airplane Check Platform
 
-## Web UI test harness
+Airplane Check surfaces FAA registration data via a modern TypeScript/Express API and React client while we wind down the historical Xamarin + Parse implementation. This repository houses both the new stack and the legacy projects so that teams can migrate incrementally without losing access to older tooling.
 
-A lightweight React-based test harness lives in `webapp/` to exercise caching logic and UI flows for the modern web experience. It ships with Jest and React Testing Library plus Parse request mocks so the suite runs entirely offline.
+## Overview
 
-### Running the tests
-
-1. `cd webapp`
-2. `npm install`
-3. `npm test`
-
-The tests validate data service caching behaviours (search, refresh, persistence) alongside user interactions (searching, refreshing, and viewing airplane details) for the new web app.
-# Airplane Check
-
-Airplane Check queries FAA registration data stored in Parse and surfaces the results to end users. The project historically shipped as a Xamarin.Android mobile client, but a modern web application now provides the primary user experience going forward. This README explains the current state of the codebase, how to work with the legacy projects that still live here, and where the migration effort is heading.
-
-## Modern web application (preferred experience)
-
-A new web front end is under active development to replace the Xamarin.Android app. The web app connects to the same Parse backend, offers a dramatically lighter install footprint, and will be the home for all future feature work. Until the web source is consolidated into this repository, refer to the web project documentation for detailed build and deployment steps; this README will be updated again once those assets are colocated. Please direct new issues and enhancements to the web application backlog first.
+- **Backend (`server/`)** – Node.js (Express + Prisma) API, dataset ingestion pipeline, and background scheduler for FAA's releasable aircraft archive.
+- **Frontend (`web/`)** – Vite + React application that consumes the REST API. The `webapp/` folder remains as a Jest harness for data-service experiments.
+- **Legacy clients** – `AirplaneCheck/`, `AirplaneCheckTest/`, and `PCLAsyncRequest/` are the Parse-based Xamarin artifacts kept for regression investigations during the migration.
+- **Infrastructure helpers** – `docker-compose.yml` provisions Postgres and the backend locally, while `Components/` and `packages/` cache Xamarin dependencies.
 
 ## Repository layout
 
 | Path | Description |
 | ---- | ----------- |
-| `AirplaneCheck/` | Legacy Xamarin.Android client that queries Parse for FAA aircraft registrations. |
-| `AirplaneCheckTest/` | Xamarin instrumentation project that exercises the Parse integration and cache behaviours on-device. |
-| `PCLAsyncRequest/` | Portable Class Library stub used for historical async request experimentation. |
-| `Components/` | Checked-in third-party Xamarin component packages (Parse SDK, Newtonsoft.Json) retained for archival builds. |
-| `packages/` | NuGet package cache referenced by the Xamarin solution. |
+| `server/` | Express API, Prisma schema, ingestion CLI, and deployment assets. |
+| `web/` | React web client that calls the REST API. |
+| `webapp/` | Jest-powered harness for service-level tests and caching experiments. |
+| `AirplaneCheck/` | Legacy Xamarin.Android client (Parse-dependent). |
+| `AirplaneCheckTest/` | Xamarin instrumentation tests for the Parse mobile app. |
+| `PCLAsyncRequest/` | Legacy PCL async helper, safe to remove once Xamarin is retired. |
+| `docker-compose.yml` | Local development stack (Postgres + backend). |
 
-## Working with the Xamarin.Android client (legacy)
+## Getting started
 
-Although the mobile client is in maintenance mode, you may still need to build or debug it while the web app rollout completes.
+### Quick start with Docker Compose
 
-### Prerequisites
+Prerequisites: Docker Desktop or Docker Engine 24+, Docker Compose v2, and an internet connection to download the FAA archive and container images.
 
-- Visual Studio with the Xamarin workload, or Xamarin Studio on macOS.
-- Android SDK platform tools (API level 19 or newer recommended).
-- An Android emulator or physical device with developer mode enabled.
+1. Copy the backend environment template and supply real values:
 
-### Initial setup
+   ```bash
+   cp server/.env.example server/.env
+   ```
 
-1. Clone this repository and open `AirplaneCheck.sln` in your IDE.
-2. Restore NuGet packages if prompted so the Newtonsoft.Json dependency is available.
-3. Verify that external storage permissions are granted in your emulator/device. The app writes cache files to external storage when retrieving aircraft data.
+   At a minimum set `FAA_DATASET_URL` to the zip file for the FAA releasable aircraft dataset and point `DATABASE_URL` at a Postgres instance accessible from the containers. You can keep the sample values when using the compose-provisioned Postgres service.
 
-### Configuring Parse credentials
+2. (Optional but recommended) create `docker-compose.override.yml` that points the backend service at your new env file so you do not have to edit the tracked manifest:
 
-The Parse application and .NET keys are currently read inside [`AirplaneCheck/MainActivity.cs`](AirplaneCheck/MainActivity.cs) when `ParseClient.Initialize` is invoked. Before running against your own backend:
+   ```yaml
+   services:
+     backend:
+       env_file:
+         - server/.env
+   ```
 
-1. Obtain the correct `ApplicationId` and `.NET Key` from your Parse dashboard.
-2. Update the `ParseClient.Initialize("<ApplicationId>", "<DotNetKey>");` call with your environment-specific values.
-3. Avoid committing production credentials—store them in a private secrets file or apply the values via build-time substitution in your CI pipeline.
+3. Build and start the stack:
 
-### Running the app
+   ```bash
+   docker compose up --build
+   ```
 
-1. In Visual Studio/Xamarin Studio, set **AirplaneCheck** as the startup project.
-2. Choose your target emulator or device and select **Run**/**Deploy**.
-3. Use the search field to enter an N-number (the app will automatically prefix `N` if omitted). Results are cached locally; use the overflow menu to refresh or clear cached entries.
+   This starts Postgres on `localhost:5432` and the backend API on `http://localhost:3000`.
 
-### Running instrumentation tests
+4. Seed the database by running the ingestion CLI inside the backend container:
 
-1. Set **AirplaneCheckTest** as the startup project.
-2. Deploy to the same emulator or device. The NUnitLite runner will appear on launch.
-3. Execute the test suite to validate Parse connectivity and cache read/write behaviour.
+   ```bash
+   docker compose exec backend npm run ingest:faa
+   ```
 
-## Caching behaviour
+   The `datasetIngestion` table is updated as the archive is downloaded, unzipped, and merged into Postgres. The API becomes searchable once the job completes.
 
-Caching is handled by [`AirplaneDataService`](AirplaneCheck/DataServices/AirplaneDataService.cs) and orchestrated through [`AirplaneInfoData`](AirplaneCheck/AirplaneInfoData.cs):
+5. Visit `http://localhost:3000/api/airplanes/refresh-status` to confirm the latest ingestion metadata, or `http://localhost:3000/health` for a simple liveness probe.
 
-- Cached records are serialized as JSON into `${ExternalStorage}/AirplaneCheck/airplaneinfo<ID>.json`.
-- `RefreshCache()` repopulates the in-memory list from all JSON files on disk; `ClearCache()` removes the files and clears the list.
-- `SaveAirplaneInfo()` assigns incremental IDs for new records and persists them back to disk so the app can render results offline.
+### Manual backend setup (without Docker)
 
-Understanding this flow is important when debugging stale results or when planning new persistence strategies in the web app.
+Prerequisites: Node.js 20 LTS, npm 10+, a running Postgres 14+ instance, and access to the FAA dataset zip.
 
-## Deprecation plan for legacy Xamarin projects
+1. Start or provision Postgres and make note of a connection string the API can reach.
+2. Install dependencies:
 
-- **AirplaneCheck**: Feature-frozen. Keep only for regression investigations until the web experience reaches feature parity, then schedule removal.
-- **AirplaneCheckTest**: Maintain as long as the mobile app ships; no further investment once the web client fully replaces it.
-- **PCLAsyncRequest**: Safe to delete once no other code depends on the experimental async wrappers.
+   ```bash
+   cd server
+   npm install
+   ```
 
-Documenting the status of these projects should streamline future cleanup once the migration is complete.
+3. Copy the env template and set values appropriate for your environment:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Update at least `FAA_DATASET_URL` and `DATABASE_URL`. To enable the background scheduler set `SCHEDULER_ENABLED=true`.
+
+4. Generate Prisma client assets and apply migrations:
+
+   ```bash
+   npm run prisma:generate
+   npm run prisma:migrate
+   ```
+
+5. Launch the API in watch mode:
+
+   ```bash
+   npm run dev
+   ```
+
+   The service listens on `http://localhost:3000` by default. Use `npm run start` to execute the compiled build.
+
+### Running the ingestion CLI
+
+The CLI downloads the latest FAA archive and reconciles it into Postgres. Trigger it whenever you stand up a fresh environment or need an on-demand refresh.
+
+```bash
+cd server
+npm run ingest:faa
+```
+
+- Successful runs log the ingestion ID, duration, and data version. Failures are recorded in the `datasetIngestion` table along with an error summary.
+- The CLI respects the same environment variables as the API, so ensure `FAA_DATASET_URL` and `DATABASE_URL` are set before execution.
+- Background refreshes can also be automated by setting `SCHEDULER_ENABLED=true` and tuning `SCHEDULER_INTERVAL_MINUTES`.
+
+## Environment configuration
+
+### Backend variables
+
+| Variable | Required | Description | Default / Example |
+| -------- | -------- | ----------- | ----------------- |
+| `NODE_ENV` | No | Influences logging and error formatting. | `development` |
+| `PORT` | No | HTTP port to bind. | `3000` |
+| `FAA_DATASET_URL` | **Yes** | HTTPS URL to the FAA releasable aircraft archive (`ReleasableAircraft.zip`). | `https://example.com/faa/ReleasableAircraft.zip` |
+| `DATABASE_URL` | **Yes** | Postgres connection string consumed by Prisma. | `postgresql://postgres:postgres@localhost:5432/airplanecheck` |
+| `SCHEDULER_ENABLED` | No | When `true`, enables the built-in refresh scheduler. | `false` |
+| `SCHEDULER_INTERVAL_MINUTES` | No | Minutes between scheduled refresh attempts. Values < 1 are coerced to 1. | `60` |
+
+### Frontend variables
+
+| Variable | Required | Description | Default / Example |
+| -------- | -------- | ----------- | ----------------- |
+| `VITE_API_BASE_URL` | **Yes** | Base URL of the backend API without a trailing slash. | `https://api.airplanecheck.example.com` |
+| `VITE_PARSE_APP_ID` | No (legacy) | Only required when running the deprecated Parse data path in the legacy clients. | *(unset)* |
+| `VITE_PARSE_JAVASCRIPT_KEY` | No (legacy) | Legacy Parse JavaScript key for the deprecated clients. | *(unset)* |
+| `VITE_PARSE_SERVER_URL` | No (legacy) | Legacy Parse server URL used by the Xamarin harness. | *(unset)* |
+
+Create `.env.local` (ignored by git) inside `web/` to supply these values during development. Vite exposes variables prefixed with `VITE_` to the browser bundle; never embed production secrets directly in the client.
+
+### Secrets handling recommendations
+
+- **Local development:** use `.env`/`.env.local` files that remain untracked. `dotenv` loads backend values automatically and Vite reads `.env.local` for the frontend.
+- **Dockerized environments:** mount environment files or inject variables via your orchestrator/hosting provider. The provided Dockerfile respects runtime `ENV` overrides.
+- **Production:** store secrets in a dedicated manager (AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault, etc.) and populate container environment variables at deploy time. Do not bake sensitive values into images or commit them to version control.
+
+## API reference
+
+The backend currently exposes two public endpoints:
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/api/airplanes` | Search normalized aircraft registrations using tail number, status, manufacturer, or owner filters. |
+| `GET` | `/api/airplanes/refresh-status` | Retrieve metadata about the most recent ingestion job. |
+
+Key request/response examples, schema details, and error codes are documented in [`server/docs/api-airplanes.md`](server/docs/api-airplanes.md). Highlights:
+
+- Search responses include `data`, `meta`, and `filters` objects so the UI can render pagination state accurately.
+- Refresh status responses expose `status`, `trigger`, timestamps, record counts, and `dataVersion`. When a dataset version is available, clients should invalidate any cached search results that reference a different version.
+- The frontend caches search results per dataset version. If the refresh job reports a new version (via `dataVersion` or the completion timestamp), clear the persisted cache before issuing new requests.
+
+## Deployment guidelines
+
+- **Containerization:** The backend ships with a multi-stage Dockerfile that compiles TypeScript, prunes dev dependencies, and emits a production image running `node dist/index.js`. Build with `docker build -t airplanecheck-backend ./server` and provide runtime environment variables via your orchestrator.
+- **Hosting options:** Any platform capable of running Node 20 containers and exposing Postgres connectivity is suitable (Kubernetes, ECS/Fargate, Fly.io, Render, Railway, etc.). Provision a managed Postgres instance with automated backups and tune connection pooling to match your platform.
+- **Scheduling refresh jobs:** Either enable the built-in scheduler (`SCHEDULER_ENABLED=true`) with an appropriate `SCHEDULER_INTERVAL_MINUTES`, or run the ingestion CLI from Cron/Cloud Scheduler. External schedulers should monitor for the `RefreshInProgressError` response to avoid overlapping jobs.
+- **Monitoring ingestion:** Track the `datasetIngestion` table for authoritative job history, including failure messages. Expose logs from the backend container to your logging stack to capture ingestion diagnostics. The `/api/airplanes/refresh-status` endpoint can serve as a lightweight health signal for dashboards and can be polled by the frontend to surface “last refreshed” messaging.
+
+## Legacy Parse migration status
+
+The Xamarin.Android app and Parse-based utilities remain in this repository for reference but are no longer the primary integration path:
+
+- New development should target the REST API exposed from `server/` and the React client in `web/`.
+- Parse credentials (`ApplicationId`, `.NET Key`, JavaScript key) are now optional and only required when working on the legacy clients.
+- Plan to archive `AirplaneCheck/`, `AirplaneCheckTest/`, and Parse-specific helpers once the web client reaches full parity. Document any remaining Parse dependencies inside feature branches so they can be replaced with API calls.
+
+Maintaining this context should ease the final deprecation of the legacy stack while giving teams clear instructions for the modern architecture.

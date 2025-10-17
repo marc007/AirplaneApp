@@ -6,6 +6,10 @@ The repository currently contains two separate front-end code bases:
 - `web/` – a Vite-based React project that appears to be the intended production web client.
 - `webapp/` – a Jest-powered harness used to exercise isolated data-service and component logic.
 
+> **Migration update (2024):** The Parse backend has been replaced by the Express/Prisma service in
+> `server/`. New development should integrate with the REST API documented in the root README. The
+> Parse-specific notes below remain relevant only while the legacy clients continue to exist.
+
 The following findings focus on the `web/` project unless otherwise specified, because that is where the Vite + React + TypeScript implementation resides.
 
 ## Findings by Focus Area
@@ -26,21 +30,21 @@ The following findings focus on the `web/` project unless otherwise specified, b
 - **Duplicate/competing service implementations:** There are two different search layers (`AirplaneDataService` vs. `airplaneService.js`), which will complicate future work unless consolidated.
 
 ### 4. UI components & navigation
-- **UI depends on an undefined REST API:** `searchAirplanes` in `src/services/airplaneService.js` targets `${VITE_API_BASE_URL}/airplanes`, but no Express/Vite proxy or API implementation exists in the repo. Without that service, the search, results, and detail pages cannot function.
+- **UI depends on the Express REST API:** `searchAirplanes` in `src/services/airplaneService.js` targets `${VITE_API_BASE_URL}/airplanes`, which is now served by the backend in `server/`. Local development must run that service (or point to a deployed environment) and handle failures gracefully when the API is unavailable.
 - **StatusIndicator only recognises two statuses (V/R):** Additional FAA status codes will render as bare fallbacks. This may be acceptable as an MVP but should be confirmed.
 - **No integration tests or Storybook coverage:** The Jest harness provides unit tests only; the Vite app has no smoke tests to ensure routing and component composition work together.
 
 ### 5. Environment configuration
-- **Parse environment sample is present but dormant:** `web/.env.example` documents `VITE_PARSE_APP_ID`, `VITE_PARSE_JAVASCRIPT_KEY`, and `VITE_PARSE_SERVER_URL`, yet these values are not consumed by the active application code path (`App.jsx`).
-- **Missing API base documentation:** The REST helper expects `VITE_API_BASE_URL` (or `API_BASE_URL`) but no sample or README guidance exists.
-- **Secrets handling strategy undecided:** There is no guidance on where to place Parse credentials in deployment (CI, hosting providers, etc.).
+- **Parse environment hooks are legacy:** The React sources still reference `VITE_PARSE_APP_ID`, `VITE_PARSE_JAVASCRIPT_KEY`, and `VITE_PARSE_SERVER_URL` for the Xamarin-era flows even though the modern app talks to the REST API. Mark those variables as legacy (or remove them) once the migration is complete.
+- **API base configuration:** The REST helper depends on `VITE_API_BASE_URL`; keep the sample files and README guidance aligned so developers know how to target local, staging, and production backends.
+- **Secrets handling strategy:** Align frontend notes with the backend's secrets guidance (e.g., `.env.local` for development and platform secret stores in production) to avoid leaking credentials during the Parse migration.
 
 ### 6. Build scripts & development server
 - **Scripts exist but fail today:** `npm run dev`, `npm run build`, and `npm run preview` are defined in `web/package.json`, but they will terminate immediately due to the missing Vite plugin and Parse dependency.
 - **No lint/test tooling configured for the Vite app:** Unlike the Jest harness, the Vite project lacks ESLint/Prettier scripts or test runners, leaving code quality unchecked.
 
 ### 7. Missing dependencies, configuration, or functionality
-- Install and configure `parse` (and types) to unblock Parse usage.
+- Retire or gate the remaining Parse dependencies to reduce confusion now that the REST API is canonical.
 - Decide between the Parse-based `AirplaneDataService` and the REST-based `airplaneService.js`, then remove the unused path.
 - Connect the React UI to whichever data layer is canonical, including cache hydration/refresh flows.
 - Replace the placeholder `App.tsx`/`main.tsx` or update the entry point so the TypeScript code actually renders.
@@ -50,11 +54,11 @@ The following findings focus on the `web/` project unless otherwise specified, b
 ## Recommendations
 1. **Fix the build tooling first**
    - Remove one of the Vite configs (prefer the TypeScript version) and align the plugin import with the installed dependency (`@vitejs/plugin-react-swc`).
-   - Add `parse` to `dependencies` and provide minimal type declarations (either via `@types/parse` or an expanded local module declaration).
+   - Either remove the dormant Parse imports or explicitly mark them as legacy dependencies so the build does not fail on missing packages while the REST API is adopted.
    - Relax or update `tsconfig.json` (e.g., enable `allowJs`) until the codebase finishes migrating to TypeScript, or convert the remaining `.jsx`/`.js` files.
 
 2. **Choose and implement a single data access strategy**
-   - Either finish the Parse-backed `AirplaneDataService` and integrate it into the React app, or continue with the REST API approach and remove the unused Parse service files.
+   - Prefer the REST-based `airplaneService.js` backed by the `server/` API and plan to remove the Parse-specific `AirplaneDataService` once parity is achieved. If Parse must remain temporarily, isolate it behind feature flags to avoid confusing future contributors.
    - Wire the chosen service into the search/results/detail components, including cache refresh behaviour analogous to the legacy Xamarin app.
 
 3. **Complete environment and configuration documentation**
