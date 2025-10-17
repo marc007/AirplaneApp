@@ -109,9 +109,10 @@ The workflow runs on pushes to `main` and can also be invoked manually via the
   overlap with peak traffic.
 - **Disaster recovery:** Enable automated backups on the PostgreSQL Flexible
   Server and configure retention to satisfy compliance requirements.
-- **Ingestion scheduler:** Disable `SCHEDULER_ENABLED` and run the ingestion CLI
-  from a separate job if you prefer centralised scheduling (e.g. Azure Functions
-  or Logic Apps).
+- **Ingestion scheduler:** You can leave `SCHEDULER_ENABLED` disabled and rely on
+  the packaged WebJob documented in
+  [azure-scheduled-refresh.md](./azure-scheduled-refresh.md) to orchestrate
+  periodic dataset refreshes from Azure App Service.
 
 With these settings in place the GitHub Actions pipeline can continuously deploy
 new API versions to Azure App Service with SSL-enforced Postgres connectivity and
