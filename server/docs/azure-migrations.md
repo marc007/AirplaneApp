@@ -47,10 +47,20 @@ npm run prisma:deploy
 
 This command will:
 
-1. Create all FAA domain tables.
+1. Create all FAA domain tables using SQL Server identity columns, `NVARCHAR` storage, and `DATETIME2` timestamps.
 2. Create relational and filter indexes used by Airplane Search.
+3. Provision the `FaaSearchCatalog` full-text search catalog with nonclustered covering indexes that replace the previous `pg_trgm` fuzzy search strategy.
 
-You can verify the schema by running `npx prisma migrate status` afterwards.
+> Full-text operations require the `CREATE FULLTEXT CATALOG` permission. On Azure SQL Database this is available on General Purpose and Business Critical tiers; ensure the login you use has `db_owner` rights before running the migrations.
+
+You can verify the schema by running `npx prisma migrate status` afterwards and inspect full-text coverage with:
+
+```sql
+SELECT c.name AS catalog_name,
+       OBJECT_NAME(i.object_id) AS table_name
+FROM sys.fulltext_catalogs c
+JOIN sys.fulltext_indexes i ON c.fulltext_catalog_id = i.fulltext_catalog_id;
+```
 
 ## 5. Seed baseline data (optional)
 
