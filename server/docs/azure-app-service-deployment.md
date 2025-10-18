@@ -1,8 +1,8 @@
 # Azure App Service deployment guide
 
-This guide documents how to run the AirplaneCheck API on Azure App Service with an
-Azure Database for PostgreSQL backend and Application Insights monitoring. Follow
-these steps after provisioning the Azure resources and cloning this repository.
+This guide documents how to run the AirplaneCheck API on Azure App Service with
+an Azure SQL Database backend and Application Insights monitoring. Follow these
+steps after provisioning the Azure resources and cloning this repository.
 
 ## 1. Prerequisites
 
@@ -11,8 +11,9 @@ Before deploying ensure you have:
 - An **Azure App Service plan** (Linux) with a **Web App** configured for Node.js
   20 or newer. Basic (B1) works for pilots; use Standard (S1) or Premium for
   production and autoscale support.
-- An **Azure Database for PostgreSQL Flexible Server** running PostgreSQL 13 or
-  newer with network access from the App Service.
+- An **Azure SQL Database** (General Purpose or Business Critical) running SQL
+  Server 2019 compatibility level or newer with network access from the App
+  Service.
 - An **Application Insights** instance in the same region as the Web App.
 - A GitHub repository that hosts this codebase and a service connection capable
   of creating GitHub Actions secrets.
@@ -20,18 +21,16 @@ Before deploying ensure you have:
 > Copy `server/.env.azure.example` to `server/.env` when you need to run the API
 > locally against the Azure-hosted services.
 
-## 2. Prepare Azure Database for PostgreSQL
+## 2. Prepare Azure SQL Database
 
-1. Enable SSL enforcement (Flexible Server uses `require_secure_transport=ON` by
-   default) and capture the full connection string from the Azure portal. Ensure
-   the string contains `sslmode=require`.
-2. Create a dedicated user for the API with permission to create extensions and
-   manage FAA schema objects.
-3. Plan for connection pooling. App Service instances are constrained by the
-   tier's connection limits. Prisma respects the `connection_limit` parameter in
-   the connection string, so set a conservative cap such as `connection_limit=10`
-   when using the built-in Postgres server (see the connection string example
-   below).
+1. Capture the full connection string from the Azure portal. Use the **ADO.NET**
+   string as the starting point—it already includes the `encrypt=true`
+   requirement.
+2. Create a dedicated user for the API with permission to create schemas and
+   manage FAA tables.
+3. Decide whether the App Service should trust the server certificate. The
+   default is `false`; set `DATABASE_TRUST_SERVER_CERTIFICATE=true` only when you
+   rely on private endpoints or development certificates.
 
 ## 3. Configure the Web App
 
@@ -44,8 +43,7 @@ Mark production secrets as slot-specific when using deployment slots.
 | ------- | ------------- | ----- |
 | `NODE_ENV` | `production` | Enables production-optimised Express behaviour. |
 | `FAA_DATASET_URL` | `https://registry.faa.gov/database/ReleasableAircraft.zip` | Public FAA archive URL. |
-| `DATABASE_SSL_MODE` | `require` | Ensures Prisma enforces TLS when connecting. |
-| `DATABASE_CONNECTION_LIMIT` | `10` | Matches App Service plan connection budgets. |
+| `DATABASE_TRUST_SERVER_CERTIFICATE` | `false` | Optional: set to `true` only when Azure SQL presents a certificate that cannot be validated. |
 | `SCHEDULER_ENABLED` | `true` | Enables background dataset refreshes. |
 | `SCHEDULER_INTERVAL_MINUTES` | `360` | Refresh every 6 hours; adjust to fit your SLA. |
 | `APPINSIGHTS_CONNECTION_STRING` | Copy from Application Insights | Enables telemetry; Azure populates this automatically when linked. |
@@ -59,11 +57,11 @@ Mark production secrets as slot-specific when using deployment slots.
 
 ### Connection strings
 
-Add a connection string named `DATABASE_URL` with type **PostgreSQL** and the
+Add a connection string named `DATABASE_URL` with type **SQLServer** and the
 value:
 
 ```
-postgresql://<user>:<password>@<server>.postgres.database.azure.com:5432/<database>?schema=public&sslmode=require&connection_limit=10
+sqlserver://<user>:<password>@<server>.database.windows.net:1433;database=<database>;encrypt=true;trustServerCertificate=false
 ```
 
 Check **Deployment slot setting** if the string should stay scoped to a single
@@ -87,14 +85,14 @@ repository secrets before running the workflow:
 | ------ | ------- |
 | `AZURE_WEBAPP_NAME` | The Web App name (e.g. `airplanecheck-api`). |
 | `AZURE_WEBAPP_PUBLISH_PROFILE` | Publish profile XML exported from the Web App. |
-| `AZURE_POSTGRES_CONNECTION_STRING` | PostgreSQL connection string used for `prisma migrate deploy`. |
+| `AZURE_SQL_CONNECTION_STRING` | SQL Server connection string used for `prisma migrate deploy`. |
 
 The workflow runs on pushes to `main` and can also be invoked manually via the
 **Workflow dispatch** action. Steps performed:
 
 1. Checkout and install backend dependencies under `server/`.
 2. Compile TypeScript to `dist/` and execute the Jest test suite.
-3. Run `npm run prisma:deploy` against the Azure Postgres instance to apply any
+3. Run `npm run prisma:deploy` against the Azure SQL instance to apply any
    pending migrations.
 4. Prune development dependencies, package the `server/` directory, and deploy
    the artifact to the Web App using the publish profile.
@@ -104,16 +102,17 @@ The workflow runs on pushes to `main` and can also be invoked manually via the
 - **Telemetry:** With `APPINSIGHTS_CONNECTION_STRING` set, the API forwards
   Express request traces and FAA refresh metrics to Application Insights while
   preserving human-readable console logs.
-- **Database monitoring:** Track active connections in the Azure portal to tune
-  `DATABASE_CONNECTION_LIMIT` and scale out the App Service when ingestion jobs
-  overlap with peak traffic.
-- **Disaster recovery:** Enable automated backups on the PostgreSQL Flexible
-  Server and configure retention to satisfy compliance requirements.
+- **Database monitoring:** Track elastic pool DTUs/vCores and connection counts
+  in the Azure portal to decide when to scale the SQL database tier or the App
+  Service plan.
+- **Disaster recovery:** Enable automated backups on Azure SQL Database and
+  configure retention to satisfy compliance requirements. Geo-redundant storage
+  is recommended for production workloads.
 - **Ingestion scheduler:** You can leave `SCHEDULER_ENABLED` disabled and rely on
   the packaged WebJob documented in
   [azure-scheduled-refresh.md](./azure-scheduled-refresh.md) to orchestrate
   periodic dataset refreshes from Azure App Service.
 
 With these settings in place the GitHub Actions pipeline can continuously deploy
-new API versions to Azure App Service with SSL-enforced Postgres connectivity and
+new API versions to Azure App Service with encrypted SQL Server connectivity and
 Application Insights visibility.

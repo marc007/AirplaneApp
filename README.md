@@ -24,9 +24,9 @@ Airplane Check surfaces FAA registration data via a modern TypeScript/Express AP
 
 ### Backend local setup
 
-Prerequisites: Node.js 20 LTS, npm 10+, a running Postgres 14+ instance, and access to the FAA dataset zip.
+Prerequisites: Node.js 20 LTS, npm 10+, a running SQL Server 2019+ instance (or Azure SQL Database), and access to the FAA dataset zip.
 
-1. Start or provision Postgres and make note of a connection string the API can reach.
+1. Start or provision SQL Server and make note of a connection string the API can reach.
 2. Install dependencies:
 
    ```bash
@@ -49,9 +49,8 @@ Prerequisites: Node.js 20 LTS, npm 10+, a running Postgres 14+ instance, and acc
    npm run prisma:migrate
    ```
 
-   > Deploying to Azure Database for PostgreSQL? Use `npm run prisma:deploy` and follow the
-   > checklist in [`server/docs/azure-migrations.md`](server/docs/azure-migrations.md)
-   > to ensure the `pg_trgm` extension and performance indexes are in place.
+   > Deploying to Azure SQL Database? Use `npm run prisma:deploy` and follow the
+   > checklist in [`server/docs/azure-migrations.md`](server/docs/azure-migrations.md).
 
 5. Launch the API in watch mode:
 
@@ -63,7 +62,7 @@ Prerequisites: Node.js 20 LTS, npm 10+, a running Postgres 14+ instance, and acc
 
 ### Running the ingestion CLI
 
-The CLI downloads the latest FAA archive and reconciles it into Postgres. Trigger it whenever you stand up a fresh environment or need an on-demand refresh.
+The CLI downloads the latest FAA archive and reconciles it into SQL Server. Trigger it whenever you stand up a fresh environment or need an on-demand refresh.
 
 ```bash
 cd server
@@ -83,9 +82,8 @@ npm run ingest:faa
 | `NODE_ENV` | No | Influences logging and error formatting. | `production` |
 | `PORT` | No | HTTP port to bind. Azure App Service injects `PORT`; leave unset to respect it. | *(unset)* |
 | `FAA_DATASET_URL` | **Yes** | HTTPS URL to the FAA releasable aircraft archive (`ReleasableAircraft.zip`). | `https://example.com/faa/ReleasableAircraft.zip` |
-| `DATABASE_URL` | **Yes** | Postgres connection string consumed by Prisma. Include `sslmode=require` for Azure Database. | `postgresql://airplanecheckadmin:Password123@airplanecheck-postgres.postgres.database.azure.com:5432/airplanecheck?sslmode=require` |
-| `DATABASE_SSL_MODE` | No | Forces Prisma to append `sslmode` to the connection string when absent. | `require` |
-| `DATABASE_CONNECTION_LIMIT` | No | Caps concurrent Postgres connections opened by Prisma. | `10` |
+| `DATABASE_URL` | **Yes** | SQL Server connection string consumed by Prisma. Include `encrypt=true`; optionally supply `trustServerCertificate=true` for private endpoints. | `sqlserver://airplanecheckuser:Password123@airplanecheck-sql.database.windows.net:1433;database=airplanecheck;encrypt=true;trustServerCertificate=false` |
+| `DATABASE_TRUST_SERVER_CERTIFICATE` | No | When `true`, overrides the connection string to trust the server certificate. Default is `false`. | `false` |
 | `SCHEDULER_ENABLED` | No | When `true`, enables the built-in refresh scheduler. Leave `false` when using Azure Functions/WebJobs. | `false` |
 | `SCHEDULER_INTERVAL_MINUTES` | No | Minutes between scheduled refresh attempts. Values < 1 are coerced to 1. | `60` |
 | `APPINSIGHTS_CONNECTION_STRING` | **Yes (Azure)** | Enables Application Insights telemetry and request logging when set. | `InstrumentationKey=...;IngestionEndpoint=https://...` |
@@ -112,7 +110,7 @@ Create `.env.local` (ignored by git) inside `web/` to supply these values during
 
 ## Azure Deployment
 
-The following runbook guides you through deploying the backend to Azure App Service, wiring it to Azure Database for PostgreSQL, scheduling data refreshes, and preparing the frontend to target the hosted API.
+The following runbook originally targeted Azure Database for PostgreSQL. While it is being updated for Azure SQL Database, rely on the guides in `server/docs`—especially [`azure-app-service-deployment.md`](server/docs/azure-app-service-deployment.md) and [`azure-migrations.md`](server/docs/azure-migrations.md)—for the latest end-to-end steps.
 
 ### Prerequisites
 
@@ -404,17 +402,17 @@ Rebuild and redeploy the frontend through your hosting provider or static site w
 ### 14. Monitoring and scaling
 
 - **Scaling Web App:** Use `az webapp scale` or configure Autoscale rules on the App Service plan. Monitor CPU, memory, and HTTP queue length from Azure Monitor.
-- **Scaling Postgres:** Adjust vCores and storage with `az postgres flexible-server update`. Monitor connections, CPU, and IO metrics.
+- **Scaling Azure SQL:** Adjust vCores and storage through the Azure Portal or with `az sql db update`. Monitor connections, CPU, and IO metrics.
 - **Logging:** Enable App Service diagnostic logs (Application Logging and HTTP Logging) and export them to Azure Monitor Logs or Storage for longer retention.
-- **Alerting:** Create Azure Monitor alerts on Application Insights metrics (server response time, failed requests) and Postgres metrics (active connections, storage usage).
-- **Disaster recovery:** Schedule automated backups for Azure Database for PostgreSQL and periodically test point-in-time restore.
+- **Alerting:** Create Azure Monitor alerts on Application Insights metrics (server response time, failed requests) and Azure SQL metrics (active sessions, DTU/CPU usage, storage consumption).
+- **Disaster recovery:** Schedule automated backups for Azure SQL Database and periodically test point-in-time restore.
 
 ## Troubleshooting Azure deployments
 
 | Symptom | Likely cause | Resolution |
 | ------- | ------------ | ---------- |
-| `P1001` errors from Prisma or `ECONNREFUSED` on startup | App Service cannot reach the database. | Confirm the firewall allows Azure services (`0.0.0.0` rule) and that the connection string contains the correct host, username, and `sslmode=require`. |
-| `pg_trgm` extension errors during migration | Extension not enabled on the Azure database. | Run the `azure.extensions` command shown in Step 3 and rerun `npm run prisma:deploy`. |
+| `P1001` errors from Prisma or `ECONNREFUSED` on startup | App Service cannot reach the database. | Confirm the firewall allows Azure services, that the connection string targets the correct server, and that `encrypt=true`/`trustServerCertificate` are set appropriately for your environment. |
+| TLS handshake failures from Prisma | Certificate validation failed. | Leave `DATABASE_TRUST_SERVER_CERTIFICATE` unset (or `false`) when using public Azure SQL endpoints, or set it to `true` when connecting via private endpoints with self-signed certificates. |
 | Requests return 500 with `RefreshInProgressError` | Concurrent ingestion jobs collide. | Ensure only one scheduler is active. Disable `SCHEDULER_ENABLED` when you rely on Azure Functions/WebJobs. |
 | Application Insights shows no telemetry | `APPINSIGHTS_CONNECTION_STRING` missing or misconfigured. | Retrieve the connection string from the Insights resource and update App Service settings. Restart the Web App. |
 | Deployment fails with `ZipDeploy` lock timeouts | Another deployment is running. | Wait for the current deployment to finish or cancel it via the Azure Portal before rerunning `az webapp deploy`. |

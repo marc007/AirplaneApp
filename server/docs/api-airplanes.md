@@ -1,7 +1,7 @@
 # Aircraft Search API
 
-The Airplane Check backend exposes a REST API that normalises FAA registration data into a
-Postgres database. It powers the modern web experience and replaces the legacy Parse-based
+The Airplane Check backend exposes a REST API that normalises FAA registration data into an
+Azure SQL Database. It powers the modern web experience and replaces the legacy Parse-based
 integrations. All endpoints return JSON and do not require authentication in development.
 
 Base URL: `https://<host>/api`

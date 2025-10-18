@@ -28,11 +28,11 @@ describe('CLI ingestReleasableAircraft', () => {
       nodeEnv: 'test',
       port: 3000,
       faaDatasetUrl: 'https://example.com/archive.zip',
-      databaseUrl: 'postgres://example',
+      databaseUrl: 'sqlserver://example',
       database: {
-        url: 'postgres://example',
-        sslMode: 'prefer',
-        connectionLimit: null,
+        url: 'sqlserver://example',
+        encrypt: true,
+        trustServerCertificate: false,
       },
       scheduler: {
         enabled: false,
@@ -90,11 +90,11 @@ describe('CLI ingestReleasableAircraft', () => {
       nodeEnv: 'test',
       port: 3000,
       faaDatasetUrl: 'https://example.com/archive.zip',
-      databaseUrl: 'postgres://example',
+      databaseUrl: 'sqlserver://example',
       database: {
-        url: 'postgres://example',
-        sslMode: 'prefer',
-        connectionLimit: null,
+        url: 'sqlserver://example',
+        encrypt: true,
+        trustServerCertificate: false,
       },
       scheduler: {
         enabled: false,

@@ -3,46 +3,34 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlserver"
   url      = env("DATABASE_URL")
-}
-
-enum DatasetIngestionStatus {
-  PENDING
-  RUNNING
-  COMPLETED
-  FAILED
-}
-
-enum DatasetIngestionTrigger {
-  MANUAL
-  SCHEDULED
 }
 
 model Manufacturer {
   id        Int             @id @default(autoincrement())
-  name      String          @unique
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  name      String          @unique @db.VarChar(255)
+  createdAt DateTime        @default(now()) @db.DateTime2
+  updatedAt DateTime        @updatedAt @db.DateTime2
   models    AircraftModel[]
 }
 
 model AircraftModel {
   id                 Int             @id @default(autoincrement())
-  code               String          @unique
+  code               String          @unique @db.VarChar(10)
   manufacturerId     Int
   manufacturer       Manufacturer    @relation(fields: [manufacturerId], references: [id])
-  modelName          String
-  typeAircraft       String?
-  typeEngine         String?
-  category           String?
-  buildCertification String?
+  modelName          String          @db.VarChar(255)
+  typeAircraft       String?         @db.VarChar(10)
+  typeEngine         String?         @db.VarChar(10)
+  category           String?         @db.VarChar(25)
+  buildCertification String?         @db.VarChar(50)
   numberOfEngines    Int?
   numberOfSeats      Int?
-  weightClass        String?
+  weightClass        String?         @db.VarChar(25)
   cruiseSpeed        Int?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt          DateTime        @default(now()) @db.DateTime2
+  updatedAt          DateTime        @updatedAt @db.DateTime2
   aircraft           Aircraft[]
 
   @@index([manufacturerId])
@@ -50,14 +38,14 @@ model AircraftModel {
 
 model Engine {
   id           Int        @id @default(autoincrement())
-  code         String     @unique
-  manufacturer String?
-  model        String?
-  type         String?
+  code         String     @unique @db.VarChar(20)
+  manufacturer String?    @db.VarChar(255)
+  model        String?    @db.VarChar(255)
+  type         String?    @db.VarChar(50)
   horsepower   Int?
   thrust       Int?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime   @default(now()) @db.DateTime2
+  updatedAt    DateTime   @updatedAt @db.DateTime2
   aircraft     Aircraft[]
 
   @@index([manufacturer])
@@ -65,18 +53,18 @@ model Engine {
 
 model Owner {
   id           Int             @id @default(autoincrement())
-  externalKey  String          @unique
-  name         String
-  addressLine1 String?
-  addressLine2 String?
-  city         String?
-  state        String?
-  postalCode   String?
-  country      String?
-  region       String?
-  county       String?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  externalKey  String          @unique @db.VarChar(20)
+  name         String          @db.VarChar(255)
+  addressLine1 String?         @db.VarChar(255)
+  addressLine2 String?         @db.VarChar(255)
+  city         String?         @db.VarChar(128)
+  state        String?         @db.VarChar(50)
+  postalCode   String?         @db.VarChar(20)
+  country      String?         @db.VarChar(50)
+  region       String?         @db.VarChar(255)
+  county       String?         @db.VarChar(255)
+  createdAt    DateTime        @default(now()) @db.DateTime2
+  updatedAt    DateTime        @updatedAt @db.DateTime2
   aircraft     AircraftOwner[]
 
   @@index([name])
@@ -85,10 +73,10 @@ model Owner {
 model AircraftOwner {
   aircraftId     Int
   ownerId        Int
-  ownershipType  String?
-  lastActionDate DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  ownershipType  String?   @db.VarChar(50)
+  lastActionDate DateTime? @db.DateTime2
+  createdAt      DateTime  @default(now()) @db.DateTime2
+  updatedAt      DateTime  @updatedAt @db.DateTime2
 
   aircraft Aircraft @relation(fields: [aircraftId], references: [id])
   owner    Owner    @relation(fields: [ownerId], references: [id])
@@ -99,23 +87,23 @@ model AircraftOwner {
 
 model DatasetIngestion {
   id                 Int        @id @default(autoincrement())
-  sourceUrl          String
-  downloadedAt       DateTime
-  dataVersion        String?
-  status             DatasetIngestionStatus @default(PENDING)
-  trigger            DatasetIngestionTrigger @default(MANUAL)
-  startedAt          DateTime   @default(now())
-  completedAt        DateTime?
-  failedAt           DateTime?
-  errorMessage       String?
+  sourceUrl          String     @db.VarChar(2048)
+  downloadedAt       DateTime   @db.DateTime2
+  dataVersion        String?    @db.VarChar(100)
+  status             String     @default("PENDING") @db.VarChar(20)
+  trigger            String     @default("MANUAL") @db.VarChar(20)
+  startedAt          DateTime   @default(now()) @db.DateTime2
+  completedAt        DateTime?  @db.DateTime2
+  failedAt           DateTime?  @db.DateTime2
+  errorMessage       String?    @db.VarChar(MAX)
   totalManufacturers Int?
   totalModels        Int?
   totalEngines       Int?
   totalAircraft      Int?
   totalOwners        Int?
   totalOwnerLinks    Int?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  createdAt          DateTime   @default(now()) @db.DateTime2
+  updatedAt          DateTime   @updatedAt @db.DateTime2
   aircraft           Aircraft[]
 
   @@index([startedAt])
@@ -124,32 +112,32 @@ model DatasetIngestion {
 model Aircraft {
   id                     Int               @id @default(autoincrement())
   tailNumber             String            @unique @db.VarChar(10)
-  serialNumber           String?
+  serialNumber           String?           @db.VarChar(100)
   modelId                Int?
   model                  AircraftModel?    @relation(fields: [modelId], references: [id])
   engineId               Int?
   engine                 Engine?           @relation(fields: [engineId], references: [id])
-  engineCode             String?
+  engineCode             String?           @db.VarChar(20)
   yearManufactured       Int?
-  registrantType         String?
-  certification          String?
-  aircraftType           String?
-  engineType             String?
-  statusCode             String?
-  modeSCode              String?
-  modeSCodeHex           String?
-  fractionalOwnership    Boolean?
-  airworthinessClass     String?
-  expirationDate         DateTime?
-  lastActivityDate       DateTime?
-  certificationIssueDate DateTime?
-  kitManufacturer        String?
-  kitModel               String?
-  statusCodeChangeDate   DateTime?
+  registrantType         String?           @db.VarChar(50)
+  certification          String?           @db.VarChar(100)
+  aircraftType           String?           @db.VarChar(50)
+  engineType             String?           @db.VarChar(50)
+  statusCode             String?           @db.VarChar(20)
+  modeSCode              String?           @db.VarChar(20)
+  modeSCodeHex           String?           @db.VarChar(20)
+  fractionalOwnership    Boolean?          @db.Bit
+  airworthinessClass     String?           @db.VarChar(100)
+  expirationDate         DateTime?         @db.DateTime2
+  lastActivityDate       DateTime?         @db.DateTime2
+  certificationIssueDate DateTime?         @db.DateTime2
+  kitManufacturer        String?           @db.VarChar(255)
+  kitModel               String?           @db.VarChar(255)
+  statusCodeChangeDate   DateTime?         @db.DateTime2
   datasetIngestionId     Int?
   datasetIngestion       DatasetIngestion? @relation(fields: [datasetIngestionId], references: [id])
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  createdAt              DateTime          @default(now()) @db.DateTime2
+  updatedAt              DateTime          @updatedAt @db.DateTime2
   owners                 AircraftOwner[]
 
   @@index([modelId])
@@ -165,5 +153,5 @@ model AircraftSearchLog {
   id          Int      @id @default(autoincrement())
   tailNumber  String   @db.VarChar(10)
   searchQuery String   @db.VarChar(50)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime @default(now()) @db.DateTime2
 }
