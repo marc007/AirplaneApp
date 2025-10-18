@@ -5,40 +5,99 @@ import { getConfig, type AppConfig } from '../config';
 
 let prisma: PrismaClient | null = null;
 
-const hasParam = (params: URLSearchParams, name: string): boolean => {
-  const target = name.toLowerCase();
-  for (const key of params.keys()) {
-    if (key.toLowerCase() === target) {
-      return true;
+type ConnectionParameter = {
+  key: string;
+  value: string;
+};
+
+const parseSemicolonConnectionString = (raw: string): {
+  base: string;
+  params: ConnectionParameter[];
+} => {
+  const segments = raw.split(';');
+  const base = segments.shift()?.trim() ?? '';
+  const params: ConnectionParameter[] = [];
+
+  for (const segment of segments) {
+    const trimmed = segment.trim();
+    if (!trimmed) {
+      continue;
     }
+
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex === -1) {
+      params.push({ key: trimmed, value: '' });
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const value = trimmed.slice(separatorIndex + 1).trim();
+
+    if (!key) {
+      continue;
+    }
+
+    params.push({ key, value });
   }
 
-  return false;
+  return { base, params };
+};
+
+const upsertParam = (params: ConnectionParameter[], key: string, value: string) => {
+  const existing = params.find((param) => param.key.toLowerCase() === key.toLowerCase());
+
+  if (existing) {
+    existing.key = key;
+    existing.value = value;
+    return;
+  }
+
+  params.push({ key, value });
+};
+
+const serializeConnectionString = (base: string, params: ConnectionParameter[]): string => {
+  if (!base) {
+    return '';
+  }
+
+  const parts = [base];
+
+  for (const param of params) {
+    if (!param.key) {
+      continue;
+    }
+
+    parts.push(param.value ? `${param.key}=${param.value}` : param.key);
+  }
+
+  return parts.join(';');
 };
 
 const enhanceDatabaseUrl = (config: AppConfig): string => {
-  const rawUrl = config.database.url;
+  const rawUrl = config.database.url.trim();
+
+  if (!rawUrl.toLowerCase().startsWith('sqlserver://')) {
+    return rawUrl;
+  }
+
+  const trustValue = config.database.trustServerCertificate ? 'true' : 'false';
 
   try {
     const parsed = new URL(rawUrl);
-
-    if (!parsed.protocol.startsWith('postgres')) {
-      return rawUrl;
-    }
-
-    const params = parsed.searchParams;
-
-    if (!hasParam(params, 'sslmode')) {
-      params.set('sslmode', config.database.sslMode);
-    }
-
-    if (config.database.connectionLimit && !hasParam(params, 'connection_limit')) {
-      params.set('connection_limit', config.database.connectionLimit.toString());
-    }
+    parsed.searchParams.set('encrypt', 'true');
+    parsed.searchParams.set('trustServerCertificate', trustValue);
 
     return parsed.toString();
   } catch {
-    return rawUrl;
+    const { base, params } = parseSemicolonConnectionString(rawUrl);
+    if (!base) {
+      return rawUrl;
+    }
+
+    upsertParam(params, 'encrypt', 'true');
+    upsertParam(params, 'trustServerCertificate', trustValue);
+
+    return serializeConnectionString(base, params);
   }
 };
 

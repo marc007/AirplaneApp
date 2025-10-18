@@ -1,14 +1,5 @@
 import { z } from 'zod';
 
-const DATABASE_SSL_MODE_VALUES = [
-  'disable',
-  'allow',
-  'prefer',
-  'require',
-  'verify-ca',
-  'verify-full',
-] as const;
-
 const rawConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z
@@ -25,16 +16,13 @@ const rawConfigSchema = z.object({
     .string()
     .regex(/^\d+$/)
     .optional(),
-  DATABASE_SSL_MODE: z.string().optional(),
-  DATABASE_CONNECTION_LIMIT: z.string().optional(),
+  DATABASE_TRUST_SERVER_CERTIFICATE: z.string().optional(),
   APPINSIGHTS_CONNECTION_STRING: z.string().optional(),
   APPINSIGHTS_ROLE_NAME: z.string().optional(),
   APPINSIGHTS_SAMPLING_PERCENTAGE: z.string().optional(),
 });
 
 type RawConfig = z.infer<typeof rawConfigSchema>;
-
-export type DatabaseSslMode = (typeof DATABASE_SSL_MODE_VALUES)[number];
 
 export type AppConfig = {
   nodeEnv: RawConfig['NODE_ENV'];
@@ -43,8 +31,8 @@ export type AppConfig = {
   databaseUrl: string;
   database: {
     url: string;
-    sslMode: DatabaseSslMode;
-    connectionLimit: number | null;
+    encrypt: boolean;
+    trustServerCertificate: boolean;
   };
   scheduler: {
     enabled: boolean;
@@ -59,43 +47,27 @@ export type AppConfig = {
   };
 };
 
-const normalizeSslMode = (value?: string | null): DatabaseSslMode => {
+const normalizeTrustServerCertificate = (value?: string | null): boolean => {
   if (!value) {
-    return 'prefer';
+    return false;
   }
 
-  const normalized = value.trim().toLowerCase().replace(/_/g, '-');
+  const normalized = value.trim().toLowerCase();
   if (!normalized) {
-    return 'prefer';
+    return false;
   }
 
-  if (!DATABASE_SSL_MODE_VALUES.includes(normalized as DatabaseSslMode)) {
-    throw new Error(
-      `DATABASE_SSL_MODE must be one of ${DATABASE_SSL_MODE_VALUES.join(
-        ', ',
-      )} when provided (received "${value}")`,
-    );
+  if (['true', '1', 'yes'].includes(normalized)) {
+    return true;
   }
 
-  return normalized as DatabaseSslMode;
-};
-
-const normalizeConnectionLimit = (value?: string | null): number | null => {
-  if (!value) {
-    return null;
+  if (['false', '0', 'no'].includes(normalized)) {
+    return false;
   }
 
-  const trimmed = value.trim();
-  if (trimmed === '') {
-    return null;
-  }
-
-  const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error('DATABASE_CONNECTION_LIMIT must be a positive integer when provided');
-  }
-
-  return parsed;
+  throw new Error(
+    'DATABASE_TRUST_SERVER_CERTIFICATE must be one of true, false, 1, 0, yes, or no when provided',
+  );
 };
 
 const normalizeSamplingPercentage = (value?: string | null): number | null => {
@@ -121,8 +93,9 @@ const normalizeSamplingPercentage = (value?: string | null): number | null => {
 export const buildConfig = (env: NodeJS.ProcessEnv): AppConfig => {
   const parsed = rawConfigSchema.parse(env);
 
-  const sslMode = normalizeSslMode(parsed.DATABASE_SSL_MODE);
-  const connectionLimit = normalizeConnectionLimit(parsed.DATABASE_CONNECTION_LIMIT);
+  const trustServerCertificate = normalizeTrustServerCertificate(
+    parsed.DATABASE_TRUST_SERVER_CERTIFICATE,
+  );
   const samplingPercentage = normalizeSamplingPercentage(parsed.APPINSIGHTS_SAMPLING_PERCENTAGE);
   const appInsightsConnectionString = parsed.APPINSIGHTS_CONNECTION_STRING?.trim();
 
@@ -133,8 +106,8 @@ export const buildConfig = (env: NodeJS.ProcessEnv): AppConfig => {
     databaseUrl: parsed.DATABASE_URL,
     database: {
       url: parsed.DATABASE_URL,
-      sslMode,
-      connectionLimit,
+      encrypt: true,
+      trustServerCertificate,
     },
     scheduler: {
       enabled: parsed.SCHEDULER_ENABLED ?? false,

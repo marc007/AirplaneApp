@@ -1,20 +1,19 @@
-# Deploying FAA migrations to Azure Database for PostgreSQL
+# Deploying FAA migrations to Azure SQL Database
 
-This project now ships with a fully managed Prisma migration that creates the
-entire FAA data model (manufacturers, aircraft models, engines, aircraft,
-owners, ownership links, dataset ingestions, and search logs). The migration
-adds the indexes and the `pg_trgm` extension required to power airplane search
-on Azure Database for PostgreSQL.
+This project ships with a Prisma migration that creates the entire FAA data
+model (manufacturers, aircraft models, engines, aircraft, owners, ownership
+links, dataset ingestions, and search logs). The migration prepares the tables
+and indexes required to power airplane search on Azure SQL Database.
 
 The following guide walks through preparing an Azure database, applying the
 migration, and seeding baseline reference data.
 
 ## 1. Prerequisites
 
-- An **Azure Database for PostgreSQL Flexible Server** instance running
-  PostgreSQL 13 or newer.
-- A connection string with a user that can create extensions and manage schema
-  objects (the built-in administrator role works well).
+- An **Azure SQL Database** instance (General Purpose or Business Critical).
+- A connection string with a user that can create schemas and manage tables
+  (the built-in administrator or a contained user with `db_owner` rights works
+  well).
 - Node.js 18+ with npm or pnpm installed locally, or a CI agent with the same.
 
 ## 2. Configure environment variables
@@ -23,14 +22,12 @@ Create a `.env` file inside `server/` (or export the variables in your runtime
 environment) that provides the Prisma connection string:
 
 ```env
-DATABASE_URL="postgresql://<user>:<password>@<host>:5432/<database>?schema=public"
+DATABASE_URL="sqlserver://<user>:<password>@<host>.database.windows.net:1433;database=<database>;encrypt=true;trustServerCertificate=false"
 FAA_DATASET_URL="https://registry.faa.gov/database/ReleasableAircraft.zip"
 ```
 
-> The migration creates the `pg_trgm` extension automatically. On Azure Flexible
-> Server the extension is available by default—no additional configuration is
-> needed. For Single Server you must enable the `PG_TRGM` extension in the Azure
-> portal before running the migration.
+> Set `trustServerCertificate=true` only when you are using private endpoints or
+> self-signed certificates that cannot be validated by default.
 
 ## 3. Install dependencies
 
@@ -50,9 +47,8 @@ npm run prisma:deploy
 
 This command will:
 
-1. Enable the `pg_trgm` extension (idempotent).
-2. Create all FAA domain tables.
-3. Create relational, filter, and trigram indexes used by Airplane Search.
+1. Create all FAA domain tables.
+2. Create relational and filter indexes used by Airplane Search.
 
 You can verify the schema by running `npx prisma migrate status` afterwards.
 
@@ -79,9 +75,9 @@ npm run ingest:faa
 ```
 
 The ingestion command downloads the latest `ReleasableAircraft` archive,
-normalises it, and streams the records into PostgreSQL inside a long-running
-transaction. Progress is tracked in the `DatasetIngestion` table created by the
-migration.
+normalises it, and streams the records into Azure SQL Database inside a
+long-running transaction. Progress is tracked in the `DatasetIngestion` table
+created by the migration.
 
 ## 7. Ongoing maintenance
 
@@ -89,9 +85,9 @@ migration.
   Prisma schema.
 - Commit the generated files under `prisma/migrations/` so that `npm run
   prisma:deploy` stays deterministic.
-- When adding new trigram or specialty indexes, document them in this file and
+- When adding new indexes or computed columns, document them in this file and
   keep them in migrations so Azure deployments remain repeatable.
 
-With these steps your Azure database will be ready to serve AirplaneCheck search
-traffic with the FAA dataset schema and indexes that are optimised for the
-application’s query patterns.
+With these steps your Azure SQL database will be ready to serve AirplaneCheck
+search traffic with the FAA dataset schema and indexes that are optimised for
+the application’s query patterns.

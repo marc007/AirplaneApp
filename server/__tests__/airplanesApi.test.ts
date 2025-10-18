@@ -30,7 +30,7 @@ describe('GET /api/airplanes', () => {
 
     process.env.NODE_ENV = 'test';
     process.env.FAA_DATASET_URL = 'https://example.com/faa/dataset.json';
-    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/airplanecheck';
+    process.env.DATABASE_URL = 'sqlserver://sa:StrongPassword!@localhost:1433;database=airplanecheck';
 
     prismaMock = {
       aircraft: {

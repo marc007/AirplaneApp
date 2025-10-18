@@ -1,8 +1,10 @@
-import { DatasetIngestionStatus, DatasetIngestionTrigger, PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 const SEED_INGESTION_SOURCE = 'seed://releasable-aircraft';
+const INGESTION_STATUS_COMPLETED = 'COMPLETED';
+const INGESTION_TRIGGER_MANUAL = 'MANUAL';
 
 async function upsertDatasetIngestion() {
   const now = new Date();
@@ -16,8 +18,8 @@ async function upsertDatasetIngestion() {
       data: {
         downloadedAt: now,
         dataVersion: 'seed-data',
-        status: DatasetIngestionStatus.COMPLETED,
-        trigger: DatasetIngestionTrigger.MANUAL,
+        status: INGESTION_STATUS_COMPLETED,
+        trigger: INGESTION_TRIGGER_MANUAL,
         startedAt: now,
         completedAt: now,
         failedAt: null,
@@ -37,9 +39,9 @@ async function upsertDatasetIngestion() {
       sourceUrl: SEED_INGESTION_SOURCE,
       downloadedAt: now,
       dataVersion: 'seed-data',
-      status: DatasetIngestionStatus.COMPLETED,
-      trigger: DatasetIngestionTrigger.MANUAL,
-      startedAt: now,
+      status: INGESTION_STATUS_COMPLETED,
+      trigger: INGESTION_TRIGGER_MANUAL,
+
       completedAt: now,
       totalManufacturers: 1,
       totalModels: 1,
