@@ -17,6 +17,7 @@ type PrismaClientMock = {
   datasetIngestion: {
     findFirst: jest.Mock;
   };
+  $queryRaw: jest.Mock;
   $transaction: jest.Mock;
 };
 
@@ -40,8 +41,21 @@ describe('GET /api/airplanes', () => {
       datasetIngestion: {
         findFirst: jest.fn(),
       },
-      $transaction: jest.fn((operations: Promise<unknown>[]) => Promise.all(operations)),
+      $queryRaw: jest.fn(),
+      $transaction: jest.fn(),
     };
+
+    prismaMock.$transaction.mockImplementation(async (arg: unknown) => {
+      if (typeof arg === 'function') {
+        return (arg as (tx: PrismaClient) => unknown)(prismaMock as unknown as PrismaClient);
+      }
+
+      if (Array.isArray(arg)) {
+        return Promise.all(arg as Promise<unknown>[]);
+      }
+
+      throw new Error('Unexpected transaction call in test');
+    });
 
     getPrismaClientMock.mockReturnValue(prismaMock as unknown as PrismaClient);
   });
@@ -97,7 +111,8 @@ describe('GET /api/airplanes', () => {
       owners: [],
     };
 
-    prismaMock.aircraft.count.mockResolvedValueOnce(2);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ total: BigInt(2) }]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
     prismaMock.aircraft.findMany.mockResolvedValueOnce([
       firstAircraft,
       secondAircraft,
@@ -172,48 +187,42 @@ describe('GET /api/airplanes', () => {
     });
 
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-    expect(prismaMock.aircraft.count).toHaveBeenCalledWith({
-      where: {
-        tailNumber: {
-          startsWith: 'N123',
-        },
-        owners: {
-          some: {
-            owner: {
-              name: {
-                contains: 'Sky',
-                mode: 'insensitive',
-              },
-            },
-          },
-        },
-      },
-    });
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(prismaMock.aircraft.count).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw.mock.calls[0][0].values).toEqual(
+      expect.arrayContaining(['N123%', '"*Sky*"']),
+    );
     expect(prismaMock.aircraft.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          tailNumber: {
-            startsWith: 'N123',
+        where: {
+          id: {
+            in: [1, 2],
           },
-          owners: {
-            some: {
+        },
+        orderBy: [
+          {
+            tailNumber: 'asc',
+          },
+          {
+            id: 'asc',
+          },
+        ],
+        select: expect.objectContaining({
+          owners: expect.objectContaining({
+            orderBy: {
               owner: {
-                name: {
-                  contains: 'Sky',
-                  mode: 'insensitive',
-                },
+                name: 'asc',
               },
             },
-          },
+          }),
         }),
-        skip: 0,
-        take: 25,
       }),
     );
   });
 
   it('supports exact tail number matches with status and manufacturer filters', async () => {
-    prismaMock.aircraft.count.mockResolvedValueOnce(1);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ total: BigInt(1) }]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ id: 42 }]);
     prismaMock.aircraft.findMany.mockResolvedValueOnce([
       {
         tailNumber: 'N98765',
@@ -261,36 +270,137 @@ describe('GET /api/airplanes', () => {
       owner: null,
     });
 
-    expect(prismaMock.aircraft.count).toHaveBeenCalledWith({
-      where: {
-        tailNumber: 'N98765',
-        statusCode: 'A',
-        model: {
-          manufacturer: {
-            name: {
-              contains: 'Boeing',
-              mode: 'insensitive',
-            },
-          },
-        },
-      },
-    });
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(prismaMock.aircraft.count).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw.mock.calls[0][0].values).toEqual(
+      expect.arrayContaining(['N98765', 'A', '"*Boeing*"']),
+    );
     expect(prismaMock.aircraft.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          tailNumber: 'N98765',
-          statusCode: 'A',
-          model: {
-            manufacturer: {
-              name: {
-                contains: 'Boeing',
-                mode: 'insensitive',
-              },
-            },
+        where: {
+          id: {
+            in: [42],
           },
-        }),
-        skip: 10,
-        take: 10,
+        },
+        orderBy: [
+          {
+            tailNumber: 'asc',
+          },
+          {
+            id: 'asc',
+          },
+        ],
+      }),
+    );
+  });
+
+  it('falls back to substring matching when full-text search is unavailable', async () => {
+    const fallbackAircraft = {
+      tailNumber: 'N54321',
+      serialNumber: 'SER543',
+      statusCode: 'A',
+      registrantType: 'Corporation',
+      model: null,
+      engine: null,
+      airworthinessClass: null,
+      certificationIssueDate: null,
+      expirationDate: null,
+      lastActivityDate: null,
+      fractionalOwnership: false,
+      owners: [
+        {
+          ownershipType: 'Corporation',
+          lastActionDate: new Date('2023-12-01T00:00:00Z'),
+          owner: {
+            name: 'Sky Logistics',
+            city: 'Denver',
+            state: 'CO',
+            country: 'US',
+          },
+        },
+      ],
+    };
+
+    prismaMock.$queryRaw
+      .mockImplementationOnce(() => {
+        throw new Error(
+          'Cannot use a CONTAINS predicate on table Owner because it is not full-text indexed.',
+        );
+      })
+      .mockResolvedValueOnce([{ total: BigInt(1) }])
+      .mockResolvedValueOnce([{ id: 7 }]);
+    prismaMock.aircraft.findMany.mockResolvedValueOnce([fallbackAircraft]);
+
+    const response = await request(createApp()).get(
+      '/api/airplanes?owner=sky&page=1&pageSize=5',
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      data: [
+        {
+          tailNumber: 'N54321',
+          serialNumber: 'SER543',
+          statusCode: 'A',
+          registrantType: 'Corporation',
+          manufacturer: null,
+          model: null,
+          modelCode: null,
+          engineManufacturer: null,
+          engineModel: null,
+          airworthinessClass: null,
+          certificationIssueDate: null,
+          expirationDate: null,
+          lastActivityDate: null,
+          fractionalOwnership: false,
+          owners: [
+            {
+              name: 'Sky Logistics',
+              city: 'Denver',
+              state: 'CO',
+              country: 'US',
+              ownershipType: 'Corporation',
+              lastActionDate: '2023-12-01T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+      meta: {
+        page: 1,
+        pageSize: 5,
+        total: 1,
+        totalPages: 1,
+      },
+      filters: {
+        tailNumber: null,
+        status: null,
+        manufacturer: null,
+        owner: 'sky',
+      },
+    });
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(3);
+    expect(prismaMock.aircraft.count).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw.mock.calls[0][0].strings.join(' ')).toContain('CONTAINS');
+    expect(prismaMock.$queryRaw.mock.calls[1][0].strings.join(' ')).toContain('CHARINDEX');
+    expect(prismaMock.$queryRaw.mock.calls[1][0].values).toEqual(expect.arrayContaining(['sky']));
+    expect(prismaMock.aircraft.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: {
+            in: [7],
+          },
+        },
+        orderBy: [
+          {
+            tailNumber: 'asc',
+          },
+          {
+            id: 'asc',
+          },
+        ],
       }),
     );
   });
