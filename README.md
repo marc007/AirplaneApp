@@ -110,7 +110,7 @@ Create `.env.local` (ignored by git) inside `web/` to supply these values during
 
 ## Azure Deployment
 
-The following runbook originally targeted Azure Database for PostgreSQL. While it is being updated for Azure SQL Database, rely on the guides in `server/docs`—especially [`azure-app-service-deployment.md`](server/docs/azure-app-service-deployment.md) and [`azure-migrations.md`](server/docs/azure-migrations.md)—for the latest end-to-end steps.
+The following runbook targets Azure SQL Database and Azure App Service. It complements the detailed guides in `server/docs`—especially [`azure-app-service-deployment.md`](server/docs/azure-app-service-deployment.md) and [`azure-migrations.md`](server/docs/azure-migrations.md).
 
 ### Prerequisites
 
@@ -126,8 +126,9 @@ The following runbook originally targeted Azure Database for PostgreSQL. While i
 > export AZ_SUBSCRIPTION="Contoso-Prod"
 > export AZ_LOCATION="eastus"
 > export AZ_RESOURCE_GROUP="rg-airplanecheck-prod"
-> export AZ_PG_SERVER="airplanecheck-pg"
-> export AZ_PG_ADMIN="airplanecheckadmin"
+> export AZ_SQL_SERVER="airplanecheck-sql"
+> export AZ_SQL_ADMIN="airplanecheckadmin"
+> export AZ_SQL_DATABASE="airplanecheck"
 > export AZ_APP_PLAN="plan-airplanecheck-prod"
 > export AZ_WEBAPP="airplanecheck-api"
 > export AZ_INSIGHTS="appinsights-airplanecheck"
@@ -148,37 +149,23 @@ az group create \
   --location "$AZ_LOCATION"
 ```
 
-### 3. Provision Azure Database for PostgreSQL Flexible Server
+### 3. Provision Azure SQL Server and Database
+
+Create a logical SQL server and a General Purpose database:
 
 ```bash
-az postgres flexible-server create \
+az sql server create \
   --resource-group "$AZ_RESOURCE_GROUP" \
-  --name "$AZ_PG_SERVER" \
+  --name "$AZ_SQL_SERVER" \
   --location "$AZ_LOCATION" \
-  --administrator-user "$AZ_PG_ADMIN" \
-  --administrator-login-password "<StrongPassword>" \
-  --sku-name Standard_D2s_v3 \
-  --tier GeneralPurpose \
-  --storage-size 64
-```
+  --admin-user "$AZ_SQL_ADMIN" \
+  --admin-password "<StrongPassword>"
 
-Create the application database:
-
-```bash
-az postgres flexible-server db create \
+az sql db create \
   --resource-group "$AZ_RESOURCE_GROUP" \
-  --server-name "$AZ_PG_SERVER" \
-  --database-name airplanecheck
-```
-
-Enable the `pg_trgm` extension required by Prisma search indexes:
-
-```bash
-az postgres flexible-server parameter set \
-  --resource-group "$AZ_RESOURCE_GROUP" \
-  --server-name "$AZ_PG_SERVER" \
-  --name azure.extensions \
-  --value "PG_TRGM"
+  --server "$AZ_SQL_SERVER" \
+  --name "$AZ_SQL_DATABASE" \
+  --service-objective GP_Gen5_2
 ```
 
 ### 4. Configure networking and firewall
@@ -186,25 +173,25 @@ az postgres flexible-server parameter set \
 Allow your workstation and App Service to reach the database:
 
 ```bash
-az postgres flexible-server firewall-rule create \
+az sql server firewall-rule create \
   --resource-group "$AZ_RESOURCE_GROUP" \
-  --server-name "$AZ_PG_SERVER" \
+  --server "$AZ_SQL_SERVER" \
   --name AllowLocalDev \
   --start-ip-address "<your-public-ip>" \
   --end-ip-address "<your-public-ip>"
 
-az postgres flexible-server firewall-rule create \
+az sql server firewall-rule create \
   --resource-group "$AZ_RESOURCE_GROUP" \
-  --server-name "$AZ_PG_SERVER" \
+  --server "$AZ_SQL_SERVER" \
   --name AllowAzure \
   --start-ip-address 0.0.0.0 \
   --end-ip-address 0.0.0.0
 ```
 
-Grab the connection string (update the password and ensure `sslmode=require`):
+Build a Prisma-compatible connection string (note `encrypt=true`):
 
 ```bash
-export DATABASE_URL="postgresql://$AZ_PG_ADMIN:<StrongPassword>@$AZ_PG_SERVER.postgres.database.azure.com:5432/airplanecheck?sslmode=require"
+export DATABASE_URL="sqlserver://$AZ_SQL_ADMIN:<StrongPassword>@$AZ_SQL_SERVER.database.windows.net:1433;database=$AZ_SQL_DATABASE;encrypt=true;trustServerCertificate=false"
 ```
 
 ### 5. Build the backend locally
@@ -240,14 +227,14 @@ az webapp create \
 
 ### 7. Configure Application Settings and Connection Strings
 
-Provide the database connection string via the App Service connection-string subsystem (marked as `PostgreSQL` so it is injected as `DATABASE_URL`):
+Provide the database connection string via the App Service connection-strings subsystem (typed as `SQLAzure` so it is injected as `DATABASE_URL`):
 
 ```bash
 az webapp config connection-string set \
   --resource-group "$AZ_RESOURCE_GROUP" \
   --name "$AZ_WEBAPP" \
   --settings DATABASE_URL="$DATABASE_URL" \
-  --connection-string-type PostgreSQL
+  --connection-string-type SQLAzure
 ```
 
 Add remaining application settings:
@@ -258,7 +245,7 @@ az webapp config appsettings set \
   --name "$AZ_WEBAPP" \
   --settings \
     NODE_ENV=production \
-    FAA_DATASET_URL="https://example.com/faa/ReleasableAircraft.zip" \
+    FAA_DATASET_URL="https://registry.faa.gov/database/ReleasableAircraft.zip" \
     APPINSIGHTS_CONNECTION_STRING="<AppInsightsConnectionString>" \
     APPINSIGHTS_ROLE_NAME="airplanecheck-api" \
     SCHEDULER_ENABLED=false
@@ -283,21 +270,9 @@ az webapp deploy \
   --type zip
 ```
 
-> **GitHub Actions alternative:** Configure the `azure/webapps-deploy` action with a publish profile. Store the publish profile XML as `AZURE_WEBAPP_PUBLISH_PROFILE` secret and add a workflow step:
->
-> ```yaml
-> - uses: azure/login@v1
->   with:
->     creds: ${{ secrets.AZURE_CREDENTIALS }}
-> - uses: azure/webapps-deploy@v2
->   with:
->     app-name: airplanecheck-api
->     package: server
-> ```
->
-> The workflow should run `npm ci`, `npm run build`, and `npm prune --production` before the deploy step.
+> **GitHub Actions alternative:** Use the workflow in `.github/workflows/azure-app-service.yml`. Store the publish profile XML as `AZURE_WEBAPP_PUBLISH_PROFILE` and your Azure SQL connection string as `AZURE_SQL_CONNECTION_STRING` repository secrets. The workflow builds, tests, runs `prisma migrate deploy` against Azure SQL, and deploys the zipped artifact.
 
-### 9. Run Prisma migrations against Azure Postgres
+### 9. Run Prisma migrations against Azure SQL
 
 Apply migrations immediately after deployment to keep schema and Prisma client aligned:
 
@@ -318,30 +293,16 @@ npm run prisma:deploy
 
 Choose one of the following approaches:
 
-**Azure Functions (Timer trigger)**
+**Built-in scheduler**
 
-1. Create a Function App linked to the same resource group and App Service plan:
-
-   ```bash
-   az functionapp create \
-     --resource-group "$AZ_RESOURCE_GROUP" \
-     --plan "$AZ_APP_PLAN" \
-     --name "$AZ_WEBAPP-refresh" \
-     --runtime node \
-     --functions-version 4
-   ```
-
-2. Add application settings mirroring the API (`FAA_DATASET_URL`, `DATABASE_URL`, etc.).
-3. Implement a timer-triggered function that executes `npm run ingest:faa` via `execa` or directly reuses the ingestion module.
-4. Deploy with `func azure functionapp publish $AZ_WEBAPP-refresh`.
+- Set `SCHEDULER_ENABLED=true` and choose `SCHEDULER_INTERVAL_MINUTES` (e.g. `360`) in App Settings. The API will run refreshes on the specified interval.
 
 **Azure WebJobs**
 
-1. Create a continuous WebJob bound to the Web App using the Azure Portal or CLI.
-2. Package a Node.js script that invokes `npm run ingest:faa` on a schedule (use a CRON expression in `settings.job`).
-3. Ensure the WebJob shares the same Application Settings as the Web App so it can reach Postgres.
+1. Use the helper in `server/scripts/deploy-faa-refresh-webjob.sh` to upload the `faa-refresh` job.
+2. The WebJob inherits the Web App's settings and connection strings, so it can reach Azure SQL Database without additional configuration.
 
-Disable `SCHEDULER_ENABLED` in App Service when using either approach to avoid overlapping jobs.
+See [`server/docs/azure-scheduled-refresh.md`](server/docs/azure-scheduled-refresh.md) for details.
 
 ### 11. Configure Application Insights
 
@@ -404,8 +365,8 @@ Rebuild and redeploy the frontend through your hosting provider or static site w
 - **Scaling Web App:** Use `az webapp scale` or configure Autoscale rules on the App Service plan. Monitor CPU, memory, and HTTP queue length from Azure Monitor.
 - **Scaling Azure SQL:** Adjust vCores and storage through the Azure Portal or with `az sql db update`. Monitor connections, CPU, and IO metrics.
 - **Logging:** Enable App Service diagnostic logs (Application Logging and HTTP Logging) and export them to Azure Monitor Logs or Storage for longer retention.
-- **Alerting:** Create Azure Monitor alerts on Application Insights metrics (server response time, failed requests) and Azure SQL metrics (active sessions, DTU/CPU usage, storage consumption).
-- **Disaster recovery:** Schedule automated backups for Azure SQL Database and periodically test point-in-time restore.
+- **Alerting:** Create Azure Monitor alerts on Application Insights metrics (server response time, failed requests) and Azure SQL metrics (active sessions, CPU usage, storage consumption).
+- **Disaster recovery:** Use point-in-time restore on Azure SQL Database and periodically test restores.
 
 ## Troubleshooting Azure deployments
 

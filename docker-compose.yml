@@ -1,17 +1,16 @@
 version: '3.9'
 
 services:
-  db:
-    image: postgres:15
+  sqlserver:
+    image: mcr.microsoft.com/azure-sql-edge:latest
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: airplanecheck
+      ACCEPT_EULA: '1'
+      MSSQL_SA_PASSWORD: 'YourStrong(!)Password'
     ports:
-      - '5432:5432'
+      - '1433:1433'
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - mssql-data:/var/opt/mssql
   backend:
     build:
       context: ./server
@@ -22,12 +21,12 @@ services:
     env_file:
       - server/.env.example
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/airplanecheck
+      DATABASE_URL: sqlserver://sa:YourStrong(!)Password@sqlserver:1433;database=airplanecheck
     volumes:
       - ./server:/usr/src/app
       - /usr/src/app/node_modules
     depends_on:
-      - db
+      - sqlserver
 
 volumes:
-  postgres-data:
+  mssql-data:

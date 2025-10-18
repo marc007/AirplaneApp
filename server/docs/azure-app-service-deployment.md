@@ -57,7 +57,7 @@ Mark production secrets as slot-specific when using deployment slots.
 
 ### Connection strings
 
-Add a connection string named `DATABASE_URL` with type **SQLServer** and the
+Add a connection string named `DATABASE_URL` with type **SQLAzure** and the
 value:
 
 ```
