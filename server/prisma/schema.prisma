@@ -21,8 +21,8 @@ model AircraftModel {
   manufacturerId     Int
   manufacturer       Manufacturer    @relation(fields: [manufacturerId], references: [id])
   modelName          String          @db.NVarChar(255)
-  typeAircraft       String?         @db.NVarChar(10)
-  typeEngine         String?         @db.NVarChar(10)
+  typeAircraft       String?         @db.NVarChar(50)
+  typeEngine         String?         @db.NVarChar(50)
   category           String?         @db.NVarChar(25)
   buildCertification String?         @db.NVarChar(50)
   numberOfEngines    Int?
